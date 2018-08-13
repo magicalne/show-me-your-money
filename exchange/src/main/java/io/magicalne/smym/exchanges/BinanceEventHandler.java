@@ -1,8 +1,11 @@
 package io.magicalne.smym.exchanges;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 public class BinanceEventHandler<T> {
 
     private final Map<String, T> subMap;
@@ -11,6 +14,7 @@ public class BinanceEventHandler<T> {
     }
 
     public void update(String symbol, T event) {
+        log.info("update symbol: {}, {}", symbol, event);
         this.subMap.put(symbol, event);
     }
 
