@@ -1,0 +1,11 @@
+dependencies {
+
+    compile project(':common')
+    compile files('libs/binance-api-client-1.0.0.jar')
+    compile 'com.squareup.retrofit2:retrofit:2.3.0'
+    compile 'com.squareup.retrofit2:converter-jackson:2.3.0'
+    compile 'commons-codec:commons-codec:1.10'
+    compile 'org.apache.commons:commons-lang3:3.6'
+    compile 'com.squareup.okhttp3:okhttp:3.11.0'
+    compileOnly(group: 'org.projectlombok', name: 'lombok', version: '1.16.16')
+}

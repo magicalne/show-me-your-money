@@ -1,0 +1,10 @@
+apply plugin: 'java'
+
+task('binance', dependsOn: 'classes', type: JavaExec) {
+    main = 'io.magicalne.smym.strategy.BinanceTriangleArbitrage'
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+dependencies {
+    compile project(':exchange'), project(':common')
+}
