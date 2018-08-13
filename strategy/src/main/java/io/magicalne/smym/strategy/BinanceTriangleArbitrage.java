@@ -61,6 +61,7 @@ public class BinanceTriangleArbitrage {
             }
         }
         this.btcusdtPairList = btcusdtPairList;
+        log.info("btcusdt pair list: {}", this.btcusdtPairList);
         this.ethusdtPairList = ethusdtPairList;
 
         Set<String> symbolSet = new HashSet<>();
@@ -140,7 +141,6 @@ public class BinanceTriangleArbitrage {
         }));
         return min.map(orderBookEntry -> Double.parseDouble(orderBookEntry.getPrice())).orElse(-1d);
     }
-
 
     private ArbitrageSpace hasArbitrageSpace(CandlestickEvent sourceEvent,
                                              CandlestickEvent middleEvent,
