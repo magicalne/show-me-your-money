@@ -8,6 +8,6 @@ public abstract class BinanceApiCallbackWrapper<T> implements BinanceApiCallback
 
     @Override
     public void onFailure(Throwable cause) {
-        log.info("binance api exception:", cause);
+        log.error("binance api exception:", cause);
     }
 }
