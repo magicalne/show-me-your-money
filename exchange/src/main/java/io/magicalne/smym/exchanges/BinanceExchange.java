@@ -35,7 +35,7 @@ public class BinanceExchange {
             }
         };
         for (String s : symbols) {
-            this.wsClient.onCandlestickEvent(s, CandlestickInterval.ONE_MINUTE, callback);
+            this.wsClient.onCandlestickEvent(s.toLowerCase(), CandlestickInterval.ONE_MINUTE, callback);
         }
         log.info("Subscribe {} candle stick event.", symbols.size());
     }
@@ -50,7 +50,7 @@ public class BinanceExchange {
             }
         };
         for (String s : symbols) {
-            this.wsClient.onDepthEvent(s, callback);
+            this.wsClient.onDepthEvent(s.toLowerCase(), callback);
         }
         log.info("Subscribe {} market depth events.", symbols.size());
     }
