@@ -14,7 +14,6 @@ public class BinanceEventHandler<T> {
     }
 
     public void update(String symbol, T event) {
-        log.info("update symbol: {}, {}", symbol, event);
         this.subMap.put(symbol, event);
     }
 
