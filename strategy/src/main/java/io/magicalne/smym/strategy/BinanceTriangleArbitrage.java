@@ -96,7 +96,6 @@ public class BinanceTriangleArbitrage {
             CandlestickEvent lastEvent = this.candlestickHandler.getEventBySymbol(triangular.getLast());
             if (sourceEvent != null && middleEvent != null && lastEvent != null) {
                 ArbitrageSpace arbitrageSpace = hasArbitrageSpace(sourceEvent, middleEvent, lastEvent);
-                log.info("arbitrage space: {}", arbitrageSpace);
                 if (arbitrageSpace != ArbitrageSpace.NONE) {
                     double profit = takeArbitrage(arbitrageSpace, triangular);
                     log.info("Triangular: {}, profit: {}", triangular, profit);
