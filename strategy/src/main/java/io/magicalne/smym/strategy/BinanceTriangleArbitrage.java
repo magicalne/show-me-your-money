@@ -61,7 +61,6 @@ public class BinanceTriangleArbitrage {
             }
         }
         this.btcusdtPairList = btcusdtPairList;
-        log.info("btcusdt pair list: {}", this.btcusdtPairList);
         this.ethusdtPairList = ethusdtPairList;
 
         Set<String> symbolSet = new HashSet<>();
@@ -95,6 +94,9 @@ public class BinanceTriangleArbitrage {
             CandlestickEvent sourceEvent = this.candlestickHandler.getEventBySymbol(triangular.getSource());
             CandlestickEvent middleEvent = this.candlestickHandler.getEventBySymbol(triangular.getMiddle());
             CandlestickEvent lastEvent = this.candlestickHandler.getEventBySymbol(triangular.getLast());
+            log.info("source event: {}", sourceEvent);
+            log.info("middle event: {}", middleEvent);
+            log.info("last event: {}", lastEvent);
             if (sourceEvent != null && middleEvent != null && lastEvent != null) {
                 ArbitrageSpace arbitrageSpace = hasArbitrageSpace(sourceEvent, middleEvent, lastEvent);
                 if (arbitrageSpace != ArbitrageSpace.NONE) {
