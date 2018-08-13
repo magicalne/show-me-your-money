@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
 public class BinanceTriangleArbitrage {
 
     private static final double TRIPLE_COMMISSION = 0.999*0.999*0.999;
+    private static final String USDT = "USDT";
+    private static final String BTC = "BTC";
+    private static final String ETH = "ETH";
     private final BinanceExchange exchange;
     private List<Triangular> btcusdtPairList;
     private List<Triangular> ethusdtPairList;
@@ -30,30 +33,29 @@ public class BinanceTriangleArbitrage {
     public void setup() {
         ExchangeInfo exchangeInfo = this.exchange.getExchangeInfo();
         List<SymbolInfo> symbols = exchangeInfo.getSymbols();
-
         Map<String, List<SymbolInfo>> quoteGroup =
                 symbols.stream().collect(Collectors.groupingBy(SymbolInfo::getQuoteAsset));
 
-        List<SymbolInfo> usdtGrp = quoteGroup.get("usdt");
-        List<SymbolInfo> btcGrp = quoteGroup.get("btc");
-        List<SymbolInfo> ethGrp = quoteGroup.get("eth");
+        List<SymbolInfo> usdtGrp = quoteGroup.get(USDT);
+        List<SymbolInfo> btcGrp = quoteGroup.get(BTC);
+        List<SymbolInfo> ethGrp = quoteGroup.get(ETH);
 
         //usdt with btc
         List<Triangular> btcusdtPairList = new LinkedList<>();
-        String btcusdt = "btcusdt";
+        String btcusdt = "BTCUSDT";
         List<Triangular> ethusdtPairList = new LinkedList<>();
-        String ethusdt = "ethusdt";
+        String ethusdt = "ETHUSDT";
         for (SymbolInfo u : usdtGrp) {
             for (SymbolInfo b : btcGrp) {
                 if (u.getBaseAsset().equals(b.getBaseAsset())) {
-                    Triangular triangular = new Triangular(btcusdt, b.getBaseAsset() + "btc", b.getBaseAsset() + "usdt");
+                    Triangular triangular = new Triangular(btcusdt, b.getBaseAsset() + BTC, b.getBaseAsset() + USDT);
                     btcusdtPairList.add(triangular);
                 }
             }
 
             for (SymbolInfo e : ethGrp) {
                 if (u.getBaseAsset().equals(e.getBaseAsset())) {
-                    Triangular triangular = new Triangular(ethusdt, e.getBaseAsset() + "eth", e.getBaseAsset() + "usdt");
+                    Triangular triangular = new Triangular(ethusdt, e.getBaseAsset() + ETH, e.getBaseAsset() + USDT);
                     ethusdtPairList.add(triangular);
                 }
             }
