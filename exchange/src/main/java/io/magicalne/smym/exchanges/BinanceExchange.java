@@ -30,7 +30,6 @@ public class BinanceExchange {
         BinanceApiCallback<CandlestickEvent> callback = new BinanceApiCallbackWrapper<CandlestickEvent>() {
             @Override
             public void onResponse(CandlestickEvent candlestickEvent) {
-                log.info("Receive candle stick event: {}", candlestickEvent);
                 candlestickHandler.update(candlestickEvent.getSymbol(), candlestickEvent);
             }
         };
@@ -45,7 +44,6 @@ public class BinanceExchange {
         BinanceApiCallback<DepthEvent> callback = new BinanceApiCallbackWrapper<DepthEvent>() {
             @Override
             public void onResponse(DepthEvent event) {
-                log.info("Receive depth event: {}", event);
                 depthEventHandler.update(event.getSymbol(), event);
             }
         };
