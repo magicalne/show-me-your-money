@@ -1,9 +1,6 @@
 package io.magicalne.smym.exchanges;
 
-import com.binance.api.client.BinanceApiAsyncRestClient;
-import com.binance.api.client.BinanceApiClientFactory;
-import com.binance.api.client.BinanceApiRestClient;
-import com.binance.api.client.BinanceApiWebSocketClient;
+import com.binance.api.client.*;
 import com.binance.api.client.domain.account.Account;
 import com.binance.api.client.domain.event.CandlestickEvent;
 import com.binance.api.client.domain.event.DepthEvent;
@@ -30,17 +27,28 @@ public class BinanceExchange {
 
     public void subscribeCandlestickEvent(Set<String> symbols, BinanceEventHandler<CandlestickEvent> handler) {
         this.candlestickHandler = handler;
+        BinanceApiCallback<CandlestickEvent> callback = new BinanceApiCallbackWrapper<CandlestickEvent>() {
+            @Override
+            public void onResponse(CandlestickEvent candlestickEvent) {
+                candlestickHandler.update(candlestickEvent.getSymbol(), candlestickEvent);
+            }
+        };
         for (String s : symbols) {
-            this.wsClient.onCandlestickEvent(s, CandlestickInterval.ONE_MINUTE,
-                    candlestickEvent -> this.candlestickHandler.update(candlestickEvent.getSymbol(), candlestickEvent));
+            this.wsClient.onCandlestickEvent(s, CandlestickInterval.ONE_MINUTE, callback);
         }
         log.info("Subscribe {} candle stick event.", symbols.size());
     }
 
     public void subscribeDepthEvent(Set<String> symbols, BinanceEventHandler<DepthEvent> handler) {
         this.depthEventHandler = handler;
+        BinanceApiCallback<DepthEvent> callback = new BinanceApiCallbackWrapper<DepthEvent>() {
+            @Override
+            public void onResponse(DepthEvent event) {
+                depthEventHandler.update(event.getSymbol(), event);
+            }
+        };
         for (String s : symbols) {
-            this.wsClient.onDepthEvent(s, e -> this.depthEventHandler.update(s, e));
+            this.wsClient.onDepthEvent(s, callback);
         }
         log.info("Subscribe {} market depth events.", symbols.size());
     }
@@ -51,12 +59,5 @@ public class BinanceExchange {
 
     public ExchangeInfo getExchangeInfo() {
         return this.restClient.getExchangeInfo();
-    }
-
-    public static void main(String[] args) {
-        String accessKey = System.getenv("BINANCE_ACCESS_KEY");
-        String secretKey = System.getenv("BINANCE_ACCESS_SECRET_KEY");
-        BinanceExchange exchange = new BinanceExchange(accessKey, secretKey);
-        log.info("{}", exchange.getExchangeInfo());
     }
 }
