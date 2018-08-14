@@ -107,19 +107,22 @@ public class BinanceTriangleArbitrage {
                 }
             }
             //use order book price level
-            final int priceLevel = 2;
+            final int priceLevel = 0;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
             List<OrderBookEntry> sourceOBBids = sourceOB.getBids();
             List<OrderBookEntry> middleOBBids = middleOB.getBids();
             List<OrderBookEntry> lastOBAsks = lastOB.getAsks();
-            if (sourceOBBids != null && sourceOBBids.size() > priceLevel &&
-                    middleOBBids != null && middleOBBids.size() > priceLevel &&
-                    lastOBAsks != null && lastOBAsks.size() > priceLevel) {
-                double source = Double.parseDouble(sourceOBBids.get(priceLevel).getPrice());
-                double middle = Double.parseDouble(middleOBBids.get(priceLevel).getPrice());
-                double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
+            if (sourceOBBids != null && sourceOBBids.size() > priceLevel+1 &&
+                    middleOBBids != null && middleOBBids.size() > priceLevel+1 &&
+                    lastOBAsks != null && lastOBAsks.size() > priceLevel+1) {
+                double source = (Double.parseDouble(sourceOBBids.get(priceLevel).getPrice()) +
+                        Double.parseDouble(sourceOBBids.get(priceLevel+1).getPrice())) / 2;
+                double middle = (Double.parseDouble(middleOBBids.get(priceLevel).getPrice()) +
+                        Double.parseDouble(middleOBBids.get(priceLevel+1).getPrice())) / 2;
+                double last = (Double.parseDouble(lastOBAsks.get(priceLevel).getPrice()) +
+                        Double.parseDouble(lastOBAsks.get(priceLevel+1).getPrice())) / 2;
                 double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
@@ -131,12 +134,15 @@ public class BinanceTriangleArbitrage {
             List<OrderBookEntry> sourceOBAsks = sourceOB.getAsks();
             List<OrderBookEntry> middleOBAsks = middleOB.getAsks();
             List<OrderBookEntry> lastOBBids = lastOB.getBids();
-            if (sourceOBAsks != null && sourceOBAsks.size() > priceLevel &&
-                    middleOBAsks != null && middleOBAsks.size() > priceLevel &&
-                    lastOBBids != null && lastOBBids.size() > priceLevel) {
-                double source = Double.parseDouble(sourceOBAsks.get(priceLevel).getPrice());
-                double middle = Double.parseDouble(middleOBAsks.get(priceLevel).getPrice());
-                double last = Double.parseDouble(lastOBBids.get(priceLevel).getPrice());
+            if (sourceOBAsks != null && sourceOBAsks.size() > priceLevel+1 &&
+                    middleOBAsks != null && middleOBAsks.size() > priceLevel+1 &&
+                    lastOBBids != null && lastOBBids.size() > priceLevel+1) {
+                double source = (Double.parseDouble(sourceOBAsks.get(priceLevel).getPrice()) +
+                        Double.parseDouble(sourceOBAsks.get(priceLevel+1).getPrice())) / 2;
+                double middle = (Double.parseDouble(middleOBAsks.get(priceLevel).getPrice()) +
+                        Double.parseDouble(middleOBAsks.get(priceLevel+1).getPrice())) / 2;
+                double last = (Double.parseDouble(lastOBBids.get(priceLevel).getPrice()) +
+                        Double.parseDouble(lastOBBids.get(priceLevel+1).getPrice())) / 2;
                 double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
