@@ -96,6 +96,9 @@ public class BinanceTriangleArbitrage {
                 if (arbitrageSpace != ArbitrageSpace.NONE) {
                     double profit = takeArbitrage(arbitrageSpace, triangular);
                     log.info("Triangular: {}, profit: {}", triangular, profit);
+                    this.candlestickHandler.invalidateEventBySymble(triangular.getSource());
+                    this.candlestickHandler.invalidateEventBySymble(triangular.getMiddle());
+                    this.candlestickHandler.invalidateEventBySymble(triangular.getLast());
                 }
 
             }
@@ -127,7 +130,9 @@ public class BinanceTriangleArbitrage {
         if (orderBook != null) {
             List<OrderBookEntry> bids = orderBook.getBids();
             if (bids != null && !bids.isEmpty()) {
-                return Double.parseDouble(bids.get(0).getPrice());
+                double p0 = Double.parseDouble(bids.get(0).getPrice());
+                double p1 = Double.parseDouble(bids.get(1).getPrice());
+                return (p0 + p1) / 2;
             }
         }
         return -1;
@@ -137,7 +142,9 @@ public class BinanceTriangleArbitrage {
         if (orderBook != null) {
             List<OrderBookEntry> asks = orderBook.getAsks();
             if (asks != null && !asks.isEmpty()) {
-                return Double.parseDouble(asks.get(0).getPrice());
+                double p0 = Double.parseDouble(asks.get(0).getPrice());
+                double p1 = Double.parseDouble(asks.get(1).getPrice());
+                return (p0 + p1) / 2;
             }
         }
         return -1;

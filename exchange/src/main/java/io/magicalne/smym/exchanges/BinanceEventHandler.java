@@ -20,4 +20,8 @@ public class BinanceEventHandler<T> {
     public T getEventBySymbol(String symbol) {
         return this.subMap.get(symbol);
     }
+
+    public void invalidateEventBySymble(String symbol) {
+        this.subMap.remove(symbol);
+    }
 }
