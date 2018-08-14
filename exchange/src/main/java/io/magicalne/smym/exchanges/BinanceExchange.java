@@ -89,9 +89,9 @@ public class BinanceExchange {
                 upsertPriceLevel(ask, orderBook.getAsks(), true);
                 if ("ETHUSDT".equals(event.getSymbol())) {
                     OrderBook ob = getOrderBook("ETHUSDT");
-                    List<OrderBookEntry> asks = ob.getAsks();
+                    List<OrderBookEntry> a = ob.getAsks();
                     System.out.println("ASK:");
-                    asks.forEach(System.out::println);
+                    a.forEach(System.out::println);
 
                     List<OrderBookEntry> bids = ob.getBids();
                     System.out.println("BID:");
