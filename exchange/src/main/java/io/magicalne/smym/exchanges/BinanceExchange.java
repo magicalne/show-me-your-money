@@ -103,10 +103,12 @@ public class BinanceExchange {
         for (OrderBookEntry e : orderBookEntries) {
             if (entry.getPrice().equals(e.getPrice())) {
                 e.setQty(entry.getQty());
+                log.info("update...");
                 return;
             }
         }
         orderBookEntries.add(entry);
+        log.info("insert...");
         Comparator<OrderBookEntry> sortAsc = (e1, e2) -> {
             double p1 = Double.parseDouble(e1.getPrice());
             double p2 = Double.parseDouble(e2.getPrice());
@@ -142,6 +144,7 @@ public class BinanceExchange {
         for (OrderBookEntry e : orderBookEntries) {
             if (price.equals(e.getPrice())) {
                 orderBookEntries.remove(index);
+                log.info("remove...");
                 return;
             }
             index ++;
