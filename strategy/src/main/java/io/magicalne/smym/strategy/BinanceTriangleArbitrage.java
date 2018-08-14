@@ -89,6 +89,7 @@ public class BinanceTriangleArbitrage {
 
     private void findArbitrage(List<Triangular> btcusdtPairList) {
         for (Triangular triangular : btcusdtPairList) {
+            //use close price form candle stick
             CandlestickEvent sourceEvent = this.candlestickHandler.getEventBySymbol(triangular.getSource());
             CandlestickEvent middleEvent = this.candlestickHandler.getEventBySymbol(triangular.getMiddle());
             CandlestickEvent lastEvent = this.candlestickHandler.getEventBySymbol(triangular.getLast());
@@ -105,7 +106,8 @@ public class BinanceTriangleArbitrage {
                     this.candlestickHandler.invalidateEventBySymble(triangular.getLast());
                 }
             }
-            final int priceLevel = 0;
+            //use order book price level
+            final int priceLevel = 2;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
@@ -120,8 +122,9 @@ public class BinanceTriangleArbitrage {
                 double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
                 double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
-                    log.info("Use {}st price in order book. Clockwise triangular: {}, profit: {}",
-                            priceLevel+1, triangular, profit);
+                    log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                            priceLevel+1, triangular.getSource(), source, triangular.getMiddle(), middle,
+                            triangular.getLast(), last, profit);
                 }
             }
 
@@ -136,8 +139,9 @@ public class BinanceTriangleArbitrage {
                 double last = Double.parseDouble(lastOBBids.get(priceLevel).getPrice());
                 double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
-                    log.info("Use {}st price in order book. Clockwise triangular: {}, profit: {}",
-                            priceLevel+1, triangular, profit);
+                    log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                            priceLevel+1, triangular.getLast(), last, triangular.getMiddle(), middle,
+                            triangular.getSource(), source, profit);
                 }
             }
         }
