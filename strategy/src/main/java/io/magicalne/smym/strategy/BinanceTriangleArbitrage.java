@@ -24,6 +24,7 @@ public class BinanceTriangleArbitrage {
     private List<Triangular> btcusdtPairList;
     private List<Triangular> ethusdtPairList;
     private BinanceEventHandler<CandlestickEvent> candlestickHandler;
+    private static final double UPPER_BOUND = 1.01;
 
     public BinanceTriangleArbitrage(String accessId, String secretKey) {
         this.exchange = new BinanceExchange(accessId, secretKey);
@@ -92,15 +93,35 @@ public class BinanceTriangleArbitrage {
             CandlestickEvent middleEvent = this.candlestickHandler.getEventBySymbol(triangular.getMiddle());
             CandlestickEvent lastEvent = this.candlestickHandler.getEventBySymbol(triangular.getLast());
             if (sourceEvent != null && middleEvent != null && lastEvent != null) {
-                ArbitrageSpace arbitrageSpace = hasArbitrageSpace(sourceEvent, middleEvent, lastEvent);
+                ArbitrageSpace arbitrageSpace = hasArbitrageSpace(
+                        Double.parseDouble(sourceEvent.getClose()),
+                        Double.parseDouble(middleEvent.getClose()),
+                        Double.parseDouble(lastEvent.getClose()));
                 if (arbitrageSpace != ArbitrageSpace.NONE) {
                     double profit = takeArbitrage(arbitrageSpace, triangular);
-                    log.info("Triangular: {}, profit: {}", triangular, profit);
+                    log.info("Use last close price. Triangular: {}, profit: {}", triangular, profit);
                     this.candlestickHandler.invalidateEventBySymble(triangular.getSource());
                     this.candlestickHandler.invalidateEventBySymble(triangular.getMiddle());
                     this.candlestickHandler.invalidateEventBySymble(triangular.getLast());
                 }
+            }
+            OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
+            OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
+            OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
+            double source = Double.parseDouble(sourceOB.getBids().get(1).getPrice());
+            double middle = Double.parseDouble(middleOB.getBids().get(1).getPrice());
+            double last = Double.parseDouble(lastOB.getAsks().get(1).getPrice());
+            double profit = getClockwise(source, middle, last);
+            if (profit > UPPER_BOUND) {
+                log.info("Use {}st price in order book. Clockwise triangular: {}, profit: {}", 2, triangular, profit);
+            }
 
+            last = Double.parseDouble(lastOB.getBids().get(1).getPrice());
+            middle = Double.parseDouble(middleOB.getAsks().get(1).getPrice());
+            source = Double.parseDouble(sourceOB.getAsks().get(1).getPrice());
+            profit = getReverse(source, middle, last);
+            if (profit > UPPER_BOUND) {
+                log.info("Use {}st price in order book. Reverse triangular: {}, profit: {}", 2, triangular, profit);
             }
         }
     }
@@ -150,18 +171,12 @@ public class BinanceTriangleArbitrage {
         return -1;
     }
 
-    private ArbitrageSpace hasArbitrageSpace(CandlestickEvent sourceEvent,
-                                             CandlestickEvent middleEvent,
-                                             CandlestickEvent lastEvent) {
-        final double upperBound = 1.01;
-        double source = Double.parseDouble(sourceEvent.getClose());
-        double middle = Double.parseDouble(middleEvent.getClose());
-        double last = Double.parseDouble(lastEvent.getClose());
+    private ArbitrageSpace hasArbitrageSpace(double source, double middle, double last) {
         double clockwise = getClockwise(source, middle, last);
         double reverse = getReverse(source, middle, last);
-        if (clockwise > upperBound) {
+        if (clockwise > UPPER_BOUND) {
             return ArbitrageSpace.CLOCKWISE;
-        } else if (reverse > upperBound) {
+        } else if (reverse > UPPER_BOUND) {
             return ArbitrageSpace.REVERSE;
         } else {
             return ArbitrageSpace.NONE;
