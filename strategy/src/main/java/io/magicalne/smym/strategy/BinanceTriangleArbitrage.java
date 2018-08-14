@@ -105,7 +105,7 @@ public class BinanceTriangleArbitrage {
                     this.candlestickHandler.invalidateEventBySymble(triangular.getLast());
                 }
             }
-            final int priceLevel = 1;
+            final int priceLevel = 0;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
