@@ -1,9 +1,9 @@
 package io.magicalne.smym.strategy;
 
 import com.binance.api.client.domain.event.CandlestickEvent;
-import com.binance.api.client.domain.event.DepthEvent;
 import com.binance.api.client.domain.general.ExchangeInfo;
 import com.binance.api.client.domain.general.SymbolInfo;
+import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
 import io.magicalne.smym.dto.Triangular;
 import io.magicalne.smym.exchanges.BinanceEventHandler;
@@ -24,7 +24,6 @@ public class BinanceTriangleArbitrage {
     private List<Triangular> btcusdtPairList;
     private List<Triangular> ethusdtPairList;
     private BinanceEventHandler<CandlestickEvent> candlestickHandler;
-    private BinanceEventHandler<DepthEvent> depthEventHandler;
 
     public BinanceTriangleArbitrage(String accessId, String secretKey) {
         this.exchange = new BinanceExchange(accessId, secretKey);
@@ -76,10 +75,8 @@ public class BinanceTriangleArbitrage {
         });
 
         this.candlestickHandler = new BinanceEventHandler<>(symbolSet.size());
-        this.depthEventHandler = new BinanceEventHandler<>(symbolSet.size());
-
         this.exchange.subscribeCandlestickEvent(symbolSet, this.candlestickHandler);
-        this.exchange.subscribeDepthEvent(symbolSet, this.depthEventHandler);
+        this.exchange.createLocalOrderBook(symbolSet, 10);
     }
 
     public void test() {
@@ -107,38 +104,43 @@ public class BinanceTriangleArbitrage {
 
     private double takeArbitrage(ArbitrageSpace arbitrageSpace, Triangular triangular) {
         log.info("Find arbitrage space: {}", arbitrageSpace);
-        DepthEvent sourceDepth = this.depthEventHandler.getEventBySymbol(triangular.getSource());
-        DepthEvent middleDepth = this.depthEventHandler.getEventBySymbol(triangular.getMiddle());
-        DepthEvent lastDepth = this.depthEventHandler.getEventBySymbol(triangular.getLast());
 
-        double source = getBestBidPrice(sourceDepth);
-        double middle = getBestBidPrice(middleDepth);
-        double last = getBestBidPrice(lastDepth);
+        OrderBook sourceOrderBook = this.exchange.getOrderBook(triangular.getSource());
+        OrderBook middleOrderBook = this.exchange.getOrderBook(triangular.getMiddle());
+        OrderBook lastOrderBook = this.exchange.getOrderBook(triangular.getLast());
 
-        if (source > 0 && middle > 0 && last > 0) {
-            if (arbitrageSpace == ArbitrageSpace.CLOCKWISE) {
-                return getClockwise(source, middle, last);
-            } else if (arbitrageSpace == ArbitrageSpace.REVERSE) {
-                return getReverse(source, middle, last);
+        if (arbitrageSpace == ArbitrageSpace.CLOCKWISE) {
+            double source = getBestBidPrice(sourceOrderBook);
+            double middle = getBestBidPrice(middleOrderBook);
+            double last = getBestAskPrice(lastOrderBook);
+            return getClockwise(source, middle, last);
+        } else if (arbitrageSpace == ArbitrageSpace.REVERSE) {
+            double last = getBestBidPrice(lastOrderBook);
+            double middle = getBestAskPrice(middleOrderBook);
+            double source = getBestAskPrice(sourceOrderBook);
+            return getReverse(source, middle, last);
+        }
+        return -1;
+    }
+
+    private double getBestBidPrice(OrderBook orderBook) {
+        if (orderBook != null) {
+            List<OrderBookEntry> bids = orderBook.getBids();
+            if (bids != null && !bids.isEmpty()) {
+                return Double.parseDouble(bids.get(0).getPrice());
             }
         }
         return -1;
     }
 
-    private double getBestBidPrice(DepthEvent depth) {
-        List<OrderBookEntry> bids = depth.getBids();
-        Optional<OrderBookEntry> min = bids.stream().min(((o1, o2) -> {
-            double p1 = Double.parseDouble(o1.getPrice());
-            double p2 = Double.parseDouble(o2.getPrice());
-            if (p1 < p2) {
-                return -1;
+    private double getBestAskPrice(OrderBook orderBook) {
+        if (orderBook != null) {
+            List<OrderBookEntry> asks = orderBook.getAsks();
+            if (asks != null && !asks.isEmpty()) {
+                return Double.parseDouble(asks.get(0).getPrice());
             }
-            if (p1 > p2) {
-                return 1;
-            }
-            return 0;
-        }));
-        return min.map(orderBookEntry -> Double.parseDouble(orderBookEntry.getPrice())).orElse(-1d);
+        }
+        return -1;
     }
 
     private ArbitrageSpace hasArbitrageSpace(CandlestickEvent sourceEvent,

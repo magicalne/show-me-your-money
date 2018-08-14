@@ -526,7 +526,6 @@ public class HuobiProRest {
         }
     }
 
-
     static class JsonUtil {
 
         static String writeValue(Object obj) throws IOException {
