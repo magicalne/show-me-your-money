@@ -87,6 +87,17 @@ public class BinanceExchange {
                 removePriceLevel(ask.getPrice(), orderBook.getAsks());
             } else {
                 upsertPriceLevel(ask, orderBook.getAsks(), true);
+                if ("ETHUSDT".equals(event.getSymbol())) {
+                    OrderBook ob = getOrderBook("ETHUSDT");
+                    List<OrderBookEntry> asks = ob.getAsks();
+                    System.out.println("ASK:");
+                    asks.forEach(System.out::println);
+
+                    List<OrderBookEntry> bids = ob.getBids();
+                    System.out.println("BID:");
+                    bids.forEach(System.out::println);
+                    System.out.println("#################");
+                }
             }
         }
         List<OrderBookEntry> bids = event.getBids();
@@ -103,12 +114,10 @@ public class BinanceExchange {
         for (OrderBookEntry e : orderBookEntries) {
             if (entry.getPrice().equals(e.getPrice())) {
                 e.setQty(entry.getQty());
-                log.info("update...");
                 return;
             }
         }
         orderBookEntries.add(entry);
-        log.info("insert...");
         Comparator<OrderBookEntry> sortAsc = (e1, e2) -> {
             double p1 = Double.parseDouble(e1.getPrice());
             double p2 = Double.parseDouble(e2.getPrice());
@@ -144,7 +153,6 @@ public class BinanceExchange {
         for (OrderBookEntry e : orderBookEntries) {
             if (price.equals(e.getPrice())) {
                 orderBookEntries.remove(index);
-                log.info("remove...");
                 return;
             }
             index ++;
