@@ -27,7 +27,7 @@ public class BinanceTriangleArbitrageTest {
         Set<String> symbols = new HashSet<>();
         String btcusdt = "BTCUSDT";
         symbols.add(btcusdt);
-        this.exchange.createLocalOrderBook(symbols, 20);
+        this.exchange.createLocalOrderBook(symbols, 5);
         for (;;) {
             OrderBook orderBook = this.exchange.getOrderBook(btcusdt);
             List<OrderBookEntry> asks = orderBook.getAsks();
@@ -44,7 +44,7 @@ public class BinanceTriangleArbitrageTest {
 
     @Test
     public void test2() {
-        OrderBook orderbook = this.exchange.getOrderBookSnapshot("BTCUSDT", 1000);
+        OrderBook orderbook = this.exchange.getOrderBookSnapshot("BTCUSDT", 10);
         List<OrderBookEntry> asks = orderbook.getAsks();
         System.out.println("ASK:");
         asks.forEach(System.out::println);

@@ -13,6 +13,8 @@ import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,14 +25,14 @@ public class BinanceExchange {
 
     private final BinanceApiWebSocketClient wsClient;
     private final BinanceApiRestClient restClient;
-    private final ConcurrentMap<String, OrderBook> orderBookMap;
+    private ConcurrentMap<String, OrderBook> orderBookMap;
     private BinanceEventHandler<CandlestickEvent> candlestickHandler;
+    private int orderBookSize;
 
     public BinanceExchange(String accessKey, String secretKey) {
         BinanceApiClientFactory factory = BinanceApiClientFactory.newInstance(accessKey, secretKey);
         this.wsClient = factory.newWebSocketClient();
         this.restClient = factory.newRestClient();
-        this.orderBookMap = new ConcurrentHashMap<>();
     }
 
     public void subscribeCandlestickEvent(Set<String> symbols, BinanceEventHandler<CandlestickEvent> handler) {
@@ -60,6 +62,8 @@ public class BinanceExchange {
     }
 
     public void createLocalOrderBook(Set<String> symbols, int size) {
+        this.orderBookMap = new ConcurrentHashMap<>(symbols.size() / 3 * 4);
+        this.orderBookSize = size;
         BinanceApiCallback<DepthEvent> callback = new BinanceApiCallbackWrapper<DepthEvent>() {
             @Override
             public void onResponse(DepthEvent event) {
@@ -76,34 +80,26 @@ public class BinanceExchange {
 
     private void updateOrderBook(DepthEvent event) {
         String symbol = event.getSymbol();
-        long firstUpdateId = event.getFirstUpdateId();
-        long finalUpdateId = event.getFinalUpdateId();
         OrderBook orderBook = this.orderBookMap.get(symbol);
-        long lastUpdateId = orderBook.getLastUpdateId();
-        if (finalUpdateId <= lastUpdateId) {
-            return;
-        }
-        if (firstUpdateId <= lastUpdateId + 1 && finalUpdateId >= lastUpdateId + 1) {
-            List<OrderBookEntry> asks = event.getAsks();
-            for (OrderBookEntry ask : asks) {
-                if ("0".equals(ask.getQty())) {
-                    removePriceLevel(ask.getPrice(), orderBook.getAsks());
-                } else {
-                    upsertPriceLevel(ask, orderBook.getAsks());
-                }
+        List<OrderBookEntry> asks = event.getAsks();
+        for (OrderBookEntry ask : asks) {
+            if (new BigDecimal(ask.getQty()).stripTrailingZeros().equals(BigDecimal.ZERO)) {
+                removePriceLevel(ask.getPrice(), orderBook.getAsks());
+            } else {
+                upsertPriceLevel(ask, orderBook.getAsks(), true);
             }
-            List<OrderBookEntry> bids = event.getBids();
-            for (OrderBookEntry bid : bids) {
-                if ("0".equals(bid.getQty())) {
-                    removePriceLevel(bid.getPrice(), orderBook.getBids());
-                } else {
-                    upsertPriceLevel(bid, orderBook.getBids());
-                }
+        }
+        List<OrderBookEntry> bids = event.getBids();
+        for (OrderBookEntry bid : bids) {
+            if (new BigDecimal(bid.getQty()).stripTrailingZeros().equals(BigDecimal.ZERO)) {
+                removePriceLevel(bid.getPrice(), orderBook.getBids());
+            } else {
+                upsertPriceLevel(bid, orderBook.getBids(), false);
             }
         }
     }
 
-    private void upsertPriceLevel(OrderBookEntry entry, List<OrderBookEntry> orderBookEntries) {
+    private void upsertPriceLevel(OrderBookEntry entry, List<OrderBookEntry> orderBookEntries, boolean ascending) {
         for (OrderBookEntry e : orderBookEntries) {
             if (entry.getPrice().equals(e.getPrice())) {
                 e.setQty(entry.getQty());
@@ -111,7 +107,7 @@ public class BinanceExchange {
             }
         }
         orderBookEntries.add(entry);
-        orderBookEntries.sort((e1, e2) -> {
+        Comparator<OrderBookEntry> sortAsc = (e1, e2) -> {
             double p1 = Double.parseDouble(e1.getPrice());
             double p2 = Double.parseDouble(e2.getPrice());
             if (p1 - p2 > 0) {
@@ -121,7 +117,24 @@ public class BinanceExchange {
                 return -1;
             }
             return 0;
-        });
+        };
+
+        Comparator<OrderBookEntry> sortDesc = (e1, e2) -> {
+            double p1 = Double.parseDouble(e1.getPrice());
+            double p2 = Double.parseDouble(e2.getPrice());
+            if (p1 - p2 > 0) {
+                return -1;
+            }
+            if (p1 - p2 < 0) {
+                return 1;
+            }
+            return 0;
+        };
+        orderBookEntries.sort(ascending ? sortAsc : sortDesc);
+        int size = orderBookEntries.size();
+        if (size > orderBookSize) {
+            orderBookEntries.remove(size - 1);
+        }
     }
 
     private void removePriceLevel(String price, List<OrderBookEntry> orderBookEntries) {
