@@ -1,10 +1,12 @@
 package io.magicalne.smym.exchanges;
 
-import com.binance.api.client.BinanceApiCallback;
-import com.binance.api.client.BinanceApiClientFactory;
-import com.binance.api.client.BinanceApiRestClient;
-import com.binance.api.client.BinanceApiWebSocketClient;
+import com.binance.api.client.*;
+import com.binance.api.client.domain.TimeInForce;
 import com.binance.api.client.domain.account.Account;
+import com.binance.api.client.domain.account.NewOrder;
+import com.binance.api.client.domain.account.NewOrderResponse;
+import com.binance.api.client.domain.account.Order;
+import com.binance.api.client.domain.account.request.OrderStatusRequest;
 import com.binance.api.client.domain.event.CandlestickEvent;
 import com.binance.api.client.domain.event.DepthEvent;
 import com.binance.api.client.domain.general.ExchangeInfo;
@@ -25,6 +27,7 @@ public class BinanceExchange {
 
     private final BinanceApiWebSocketClient wsClient;
     private final BinanceApiRestClient restClient;
+    private final BinanceApiAsyncRestClient asyncRestClient;
     private ConcurrentMap<String, OrderBook> orderBookMap;
     private BinanceEventHandler<CandlestickEvent> candlestickHandler;
     private int orderBookSize;
@@ -33,6 +36,7 @@ public class BinanceExchange {
         BinanceApiClientFactory factory = BinanceApiClientFactory.newInstance(accessKey, secretKey);
         this.wsClient = factory.newWebSocketClient();
         this.restClient = factory.newRestClient();
+        this.asyncRestClient = factory.newAsyncRestClient();
     }
 
     public void subscribeCandlestickEvent(Set<String> symbols, BinanceEventHandler<CandlestickEvent> handler) {
@@ -59,6 +63,22 @@ public class BinanceExchange {
 
     public OrderBook getOrderBook(String symbol) {
         return this.orderBookMap.get(symbol);
+    }
+
+    public Order queryOrder(String symbol, long orderId) {
+        return this.restClient.getOrderStatus(new OrderStatusRequest(symbol, orderId));
+    }
+
+    public NewOrderResponse limitBuy(String symbol, TimeInForce timeInForce, String quantity, String price,
+                                     long recv) {
+        NewOrder newOrder = NewOrder.limitBuy(symbol, timeInForce, quantity, price).recvWindow(recv);
+        return this.restClient.newOrder(newOrder);
+    }
+
+    public NewOrderResponse limitSell(String symbol, TimeInForce timeInForce, String quantity, String price,
+                                      long recvWindow) {
+        NewOrder newOrder = NewOrder.limitSell(symbol, timeInForce, quantity, price).recvWindow(recvWindow);
+        return this.restClient.newOrder(newOrder);
     }
 
     public void createLocalOrderBook(Set<String> symbols, int size) {

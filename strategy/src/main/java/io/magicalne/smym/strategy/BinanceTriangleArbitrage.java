@@ -1,15 +1,18 @@
 package io.magicalne.smym.strategy;
 
-import com.binance.api.client.domain.event.CandlestickEvent;
+import com.binance.api.client.domain.OrderStatus;
+import com.binance.api.client.domain.TimeInForce;
+import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.general.ExchangeInfo;
 import com.binance.api.client.domain.general.SymbolInfo;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
 import io.magicalne.smym.dto.Triangular;
-import io.magicalne.smym.exchanges.BinanceEventHandler;
 import io.magicalne.smym.exchanges.BinanceExchange;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,20 +23,21 @@ public class BinanceTriangleArbitrage {
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private final BinanceExchange exchange;
-    private List<Triangular> btcusdtPairList;
-    private List<Triangular> ethusdtPairList;
-    private BinanceEventHandler<CandlestickEvent> candlestickHandler;
     private static final double UPPER_BOUND = 1.01;
     private static final double BUY_SLIPPAGE = 1.0001;
     private static final double SELL_SLIPPAGE = 0.9999;
+
+    private final BinanceExchange exchange;
+    private List<Triangular> btcusdtPairList;
+    private List<Triangular> ethusdtPairList;
+    private ExchangeInfo exchangeInfo;
 
     public BinanceTriangleArbitrage(String accessId, String secretKey) {
         this.exchange = new BinanceExchange(accessId, secretKey);
     }
 
     public void setup() {
-        ExchangeInfo exchangeInfo = this.exchange.getExchangeInfo();
+        this.exchangeInfo = this.exchange.getExchangeInfo();
         List<SymbolInfo> symbols = exchangeInfo.getSymbols();
         Map<String, List<SymbolInfo>> quoteGroup =
                 symbols.stream().collect(Collectors.groupingBy(SymbolInfo::getQuoteAsset));
@@ -76,9 +80,6 @@ public class BinanceTriangleArbitrage {
             symbolSet.add(t.getMiddle());
             symbolSet.add(t.getLast());
         });
-
-        this.candlestickHandler = new BinanceEventHandler<>(symbolSet.size());
-        this.exchange.subscribeCandlestickEvent(symbolSet, this.candlestickHandler);
         this.exchange.createLocalOrderBook(symbolSet, 10);
     }
 
@@ -91,23 +92,6 @@ public class BinanceTriangleArbitrage {
 
     private void findArbitrage(List<Triangular> btcusdtPairList) {
         for (Triangular triangular : btcusdtPairList) {
-            //use close price form candle stick
-            CandlestickEvent sourceEvent = this.candlestickHandler.getEventBySymbol(triangular.getSource());
-            CandlestickEvent middleEvent = this.candlestickHandler.getEventBySymbol(triangular.getMiddle());
-            CandlestickEvent lastEvent = this.candlestickHandler.getEventBySymbol(triangular.getLast());
-            if (sourceEvent != null && middleEvent != null && lastEvent != null) {
-                ArbitrageSpace arbitrageSpace = hasArbitrageSpace(
-                        Double.parseDouble(sourceEvent.getClose()),
-                        Double.parseDouble(middleEvent.getClose()),
-                        Double.parseDouble(lastEvent.getClose()));
-                if (arbitrageSpace != ArbitrageSpace.NONE) {
-                    double profit = takeArbitrage(arbitrageSpace, triangular);
-                    log.info("Use last close price. Triangular: {}, profit: {}", triangular, profit);
-                    this.candlestickHandler.invalidateEventBySymble(triangular.getSource());
-                    this.candlestickHandler.invalidateEventBySymble(triangular.getMiddle());
-                    this.candlestickHandler.invalidateEventBySymble(triangular.getLast());
-                }
-            }
             //use order book price level
             final int priceLevel = 0;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
@@ -151,6 +135,31 @@ public class BinanceTriangleArbitrage {
                 }
             }
         }
+    }
+
+    private String buyFirstRound(String symbol, String quoteQuantity, String price) {
+        String baseQuantity = getBaseQuantity(symbol, quoteQuantity, price);
+        NewOrderResponse response = this.exchange.limitBuy(symbol, TimeInForce.IOC, baseQuantity, price, 100);
+        OrderStatus status = response.getStatus();
+        if (status == OrderStatus.CANCELED || status == OrderStatus.REJECTED || status == OrderStatus.EXPIRED) {
+            return null;
+        } else {
+            return response.getExecutedQty();
+        }
+    }
+//
+//    private String buySecondRound(String symbol, String quoteQuantity, String price) {
+//        String baseQuantity = getBaseQuantity(symbol, quoteQuantity, price);
+//
+//    }
+
+    private String getBaseQuantity(String symbol, String quoteQuantity, String price) {
+        SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
+        Integer baseAssetPrecision = symbolInfo.getBaseAssetPrecision();
+        Integer quotePrecision = symbolInfo.getQuotePrecision();
+        BigDecimal quote = new BigDecimal(quoteQuantity).setScale(quotePrecision, RoundingMode.DOWN);
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
+        return quote.divide(p, baseAssetPrecision).toPlainString();
     }
 
     private double takeArbitrage(ArbitrageSpace arbitrageSpace, Triangular triangular) {

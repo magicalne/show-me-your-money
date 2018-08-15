@@ -42,7 +42,7 @@ public class HuobiTriangleArbitrage {
         this.sourceReq.setAccountId(accountId);
         this.middleReq.setAccountId(accountId);
         this.lastReq.setAccountId(accountId);
-        this.client = new HuobiProRest("fb5335bd-b1902e32-cc0b36e2-6850a", "49761a11-c8c3b8d3-e3639666-6a6c4");
+        this.client = new HuobiProRest();
     }
 
     public void init() {
