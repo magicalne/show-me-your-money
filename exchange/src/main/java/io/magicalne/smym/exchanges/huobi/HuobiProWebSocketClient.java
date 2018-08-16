@@ -23,10 +23,11 @@ public class HuobiProWebSocketClient implements Closeable {
         this.client = Util.createOKHTTPClient().dispatcher(d).build();
     }
 
-    Closeable createNewWebSocket(String topic, Set<String> symbols, HuobiApiWebSocketListener<?> listener) {
+    Closeable createNewWebSocket(String template, Set<String> symbols, HuobiApiWebSocketListener<?> listener) {
         Request request = new Request.Builder().url(API_HUOBI_PRO_WS).build();
         final WebSocket webSocket = client.newWebSocket(request, listener);
         for (String symbol : symbols) {
+            String topic = String.format(template, symbol);
             String reqBody = String.format(SUB_REQUEST_TEMPLATE, topic, symbol);
             webSocket.send(reqBody);
         }
