@@ -21,8 +21,8 @@ public class HuobiTriangleArbitrage {
     private static final String PARTIAL_FILLED = "partial-filled";
     private static final String FILLED = "filled";
     private static final double UPPER_BOUND = 1.01;
-    private static final double BUY_SLIPPAGE = 0.9998;
-    private static final double SELL_SLIPPAGE = 1.0001;
+    private static final double BUY_SLIPPAGE = 0.9995;
+    private static final double SELL_SLIPPAGE = 1.0005;
 
     private final HuobiExchange exchange;
     private List<Triangular> btcusdtPairList;
@@ -184,7 +184,7 @@ public class HuobiTriangleArbitrage {
             last = lastDepthBids.get(priceLevel).get(0);
             profit = getReverse(source * SELL_SLIPPAGE, middle * SELL_SLIPPAGE, last * BUY_SLIPPAGE);
             if (profit > UPPER_BOUND) {
-                log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
                         priceLevel+1,
                         triangular.getSource(), source,
                         triangular.getMiddle(), middle,
