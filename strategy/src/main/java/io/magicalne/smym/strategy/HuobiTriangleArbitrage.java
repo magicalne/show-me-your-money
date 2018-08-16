@@ -31,6 +31,7 @@ public class HuobiTriangleArbitrage {
     private final Map<String, Symbol> symbolMap = new HashMap<>();
 
     private final String accountId;
+    private String capital;
 
 
     public HuobiTriangleArbitrage(String accountId, String accessKey, String secretKey) {
@@ -69,12 +70,12 @@ public class HuobiTriangleArbitrage {
         List<Triangular> htusdtPairList = new LinkedList<>();
         String htusdt = "htusdt";
         for (Symbol u : usdtGrp) {
-            for (Symbol b : btcGrp) {
-                if (u.getBaseCurrency().equals(b.getBaseCurrency())) {
-                    Triangular triangular = new Triangular(btcusdt, b.getBaseCurrency() + "btc", b.getBaseCurrency() + "usdt");
-                    btcusdtPairList.add(triangular);
-                }
-            }
+//            for (Symbol b : btcGrp) {
+//                if (u.getBaseCurrency().equals(b.getBaseCurrency())) {
+//                    Triangular triangular = new Triangular(btcusdt, b.getBaseCurrency() + "btc", b.getBaseCurrency() + "usdt");
+//                    btcusdtPairList.add(triangular);
+//                }
+//            }
 
             for (Symbol e : ethGrp) {
                 if (u.getBaseCurrency().equals(e.getBaseCurrency())) {
@@ -82,13 +83,13 @@ public class HuobiTriangleArbitrage {
                     ethusdtPairList.add(triangular);
                 }
             }
-
-            for (Symbol h : htGrp) {
-                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
-                    Triangular triangular = new Triangular(htusdt, h.getBaseCurrency() + "ht", h.getBaseCurrency() + "usdt");
-                    htusdtPairList.add(triangular);
-                }
-            }
+//
+//            for (Symbol h : htGrp) {
+//                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
+//                    Triangular triangular = new Triangular(htusdt, h.getBaseCurrency() + "ht", h.getBaseCurrency() + "usdt");
+//                    htusdtPairList.add(triangular);
+//                }
+//            }
         }
 
         Set<String> symbolSet = new HashSet<>();
@@ -114,24 +115,23 @@ public class HuobiTriangleArbitrage {
         exchange.createOrderBook(symbolSet, 5);
     }
 
-    public double getCapitalFromBalance(String currency) {
+    public String getCapitalFromBalance(String currency) {
         BalanceResponse balanceRes = this.exchange.getAccount(accountId);
         List<BalanceBean> balances = balanceRes.getData().getList();
-        double balance = -1;
         for (BalanceBean b : balances) {
             if (currency.equals(b.getCurrency())) {
-                balance = Double.parseDouble(b.getBalance());
-                log.info("Balance currency{}: {}", currency, balance);
-                break;
+                return b.getBalance();
             }
         }
-        return balance;
+        return null;
     }
 
-    private void run() {
-//        double capitalDouble = Double.parseDouble(capital);
+    private void run(String capital) {
+        double c = Double.parseDouble(capital);
 
-//        capitalDouble = Math.min(capitalDouble, getCapitalFromBalance("usdt"));
+        String balance = getCapitalFromBalance("usdt");
+        double b = Double.parseDouble(balance);
+        this.capital = c > b ? balance : capital;
         for (;;) {
             findArbitrage(this.btcusdtPairList);
             findArbitrage(this.ethusdtPairList);
@@ -153,10 +153,10 @@ public class HuobiTriangleArbitrage {
             List<List<Double>> sourceDepthBids = sourceDepth.getBids();
             List<List<Double>> middleDepthBids = middleDepth.getBids();
             List<List<Double>> lastDepthAsks = lastDepth.getAsks();
-            double source = sourceDepthBids.get(priceLevel).get(0);
-            double middle = middleDepthBids.get(priceLevel).get(0);
-            double last = lastDepthAsks.get(priceLevel).get(0);
-            double profit = getClockwise(source * BUY_SLIPPAGE, middle * BUY_SLIPPAGE, last * SELL_SLIPPAGE);
+            double source = sourceDepthBids.get(priceLevel).get(0) * BUY_SLIPPAGE;
+            double middle = middleDepthBids.get(priceLevel).get(0) * BUY_SLIPPAGE;
+            double last = lastDepthAsks.get(priceLevel).get(0) * SELL_SLIPPAGE;
+            double profit = getClockwise(source, middle, last);
             if (profit > UPPER_BOUND) {
                 log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
                         priceLevel+1,
@@ -164,6 +164,11 @@ public class HuobiTriangleArbitrage {
                         triangular.getMiddle(), middle,
                         triangular.getLast(), last,
                         profit);
+                try {
+                    takeIt(triangular, source, middle, last, this.capital, true);
+                } catch (InterruptedException e) {
+                    log.error("InterruptedException.", e);
+                }
             }
             //reverse clockwise
             List<List<Double>> sourceDepthAsks = sourceDepth.getAsks();
@@ -184,11 +189,16 @@ public class HuobiTriangleArbitrage {
         }
     }
 
-    private void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+    public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
                         String quoteQty, boolean clockwise) throws InterruptedException {
 
         if (clockwise) {
-            TradeInfo firstRound = firstRoundBuy(triangular.getSource(), sourcePrice, quoteQty);
+            TradeInfo firstRound = null;
+            try {
+                firstRound = firstRoundBuy(triangular.getSource(), sourcePrice, quoteQty);
+            } catch (Exception e) {
+                log.error("Exception happened in first round. Ignore it.", e);
+            }
             if (firstRound == null) {
                 return;
             }
@@ -441,7 +451,7 @@ public class HuobiTriangleArbitrage {
             String accessKeySecret = System.getenv("HUOBI_ACCESS_KEY_SECRET");
             HuobiTriangleArbitrage strategy = new HuobiTriangleArbitrage("2672827", accessKeyId, accessKeySecret);
             strategy.init();
-            strategy.run();
+            strategy.run(args[0]);
         } catch (Exception e) {
             log.info("Exception happened. Stop trading.", e);
         }
