@@ -246,7 +246,9 @@ public class HuobiTriangleArbitrage {
         BigDecimal q = new BigDecimal(quoteQty).setScale(quotePrecision, RoundingMode.DOWN);
         BigDecimal qty = q.divide(p, quotePrecision).setScale(quotePrecision, RoundingMode.DOWN);
 
-        OrderPlaceResponse res = this.exchange.limitBuy(symbol, qty.toPlainString(), p.toPlainString());
+        String qtyStr = qty.toPlainString();
+        String priceStr = p.toPlainString();
+        OrderPlaceResponse res = this.exchange.limitBuy(symbol, qtyStr, priceStr);
         if (res.checkStatusOK()) {
             String orderId = res.getData();
             long record = System.currentTimeMillis();
@@ -266,6 +268,7 @@ public class HuobiTriangleArbitrage {
                 return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, true);
             }
         }
+        log.error("Failed to buy. symbol: {}, qty: {} @price: {}, res: {}", symbol, qtyStr, priceStr, res);
         return null;
     }
 
