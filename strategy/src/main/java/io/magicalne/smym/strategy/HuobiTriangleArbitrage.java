@@ -20,9 +20,9 @@ public class HuobiTriangleArbitrage {
     private static final String CANCELED = "canceled";
     private static final String PARTIAL_FILLED = "partial-filled";
     private static final String FILLED = "filled";
-    private static final double UPPER_BOUND = 1.01;
-    private static final double BUY_SLIPPAGE = 0.9992;
-    private static final double SELL_SLIPPAGE = 1.0003;
+    private static final double UPPER_BOUND = 1.005;
+    private static final double BUY_SLIPPAGE = 0.9999;
+    private static final double SELL_SLIPPAGE = 1.0001;
 
     private final HuobiExchange exchange;
     private List<Triangular> btcusdtPairList;
@@ -170,10 +170,10 @@ public class HuobiTriangleArbitrage {
             List<List<Double>> sourceDepthBids = sourceDepth.getBids();
             List<List<Double>> middleDepthBids = middleDepth.getBids();
             List<List<Double>> lastDepthAsks = lastDepth.getAsks();
-            source = sourceDepthBids.get(priceLevel).get(0);
-            middle = middleDepthBids.get(priceLevel).get(0);
-            last = lastDepthAsks.get(priceLevel).get(0);
-            profit = getReverse(source * SELL_SLIPPAGE, middle * SELL_SLIPPAGE, last * BUY_SLIPPAGE);
+            source = sourceDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
+            middle = middleDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
+            last = lastDepthAsks.get(priceLevel).get(0) * BUY_SLIPPAGE;
+            profit = getReverse(source, middle, last);
             if (profit > UPPER_BOUND) {
                 log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
                         priceLevel+1,
