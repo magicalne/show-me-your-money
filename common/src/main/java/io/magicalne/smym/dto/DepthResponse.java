@@ -1,12 +1,9 @@
 package io.magicalne.smym.dto;
 
-/**
- * @Author ISME
- * @Date 2018/1/14
- * @Time 14:38
- */
+import lombok.Data;
 
-public class DepthResponse<T> {
+@Data
+public class DepthResponse {
 
 
     /**
@@ -32,53 +29,4 @@ public class DepthResponse<T> {
      * }
      */
     private Depth tick;
-
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getCh() {
-        return ch;
-    }
-
-    public void setCh(String ch) {
-        this.ch = ch;
-    }
-
-    public String getTs() {
-        return ts;
-    }
-
-    public void setTs(String ts) {
-        this.ts = ts;
-    }
-
-    public Depth getTick() {
-        return tick;
-    }
-
-    public void setTick(Depth tick) {
-        this.tick = tick;
-    }
-
-    public String getErrCode() {
-        return errCode;
-    }
-
-    public void setErrCode(String errCode) {
-        this.errCode = errCode;
-    }
-
-    public String getErrMsg() {
-        return errMsg;
-    }
-
-    public void setErrMsg(String errMsg) {
-        this.errMsg = errMsg;
-    }
 }

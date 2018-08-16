@@ -1,14 +1,10 @@
 package io.magicalne.smym.dto;
 
-import java.math.BigDecimal;
+import lombok.Data;
+
 import java.util.List;
 
-/**
- * @Author ISME
- * @Date 2018/1/14
- * @Time 14:39
- */
-
+@Data
 public class Depth {
 
     /**
@@ -20,38 +16,7 @@ public class Depth {
 
     private String id;
     private String ts;
-    private List<List<BigDecimal>> bids;
-    private List<List<BigDecimal>> asks;
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getTs() {
-        return ts;
-    }
-
-    public void setTs(String ts) {
-        this.ts = ts;
-    }
-
-    public List<List<BigDecimal>> getBids() {
-        return bids;
-    }
-
-    public void setBids(List<List<BigDecimal>> bids) {
-        this.bids = bids;
-    }
-
-    public List<List<BigDecimal>> getAsks() {
-        return asks;
-    }
-
-    public void setAsks(List<List<BigDecimal>> asks) {
-        this.asks = asks;
-    }
+    private long version;
+    private List<List<Double>> bids;
+    private List<List<Double>> asks;
 }

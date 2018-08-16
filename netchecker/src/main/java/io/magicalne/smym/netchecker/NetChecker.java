@@ -2,15 +2,16 @@ package io.magicalne.smym.netchecker;
 
 import io.magicalne.smym.dto.OrderPlaceRequest;
 import io.magicalne.smym.dto.OrderType;
-import io.magicalne.smym.exchanges.HuobiProRest;
+import io.magicalne.smym.exchanges.huobi.HuobiProRest;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class NetChecker {
 
     private void latencyTest() {
-
-        HuobiProRest client = new HuobiProRest();
+        String accessKeyId = System.getenv("HUOBI_ACCESS_KEY");
+        String accessKeySecret = System.getenv("HUOBI_ACCESS_KEY_SECRET");
+        HuobiProRest client = new HuobiProRest(accessKeyId, accessKeySecret);
         int round = 10;
         log.info("Starting test network latency. Total round: {}.", round+1);
         long totalStart = System.currentTimeMillis();

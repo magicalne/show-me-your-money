@@ -41,7 +41,7 @@ public class BinanceExchange {
 
     public void subscribeCandlestickEvent(Set<String> symbols, BinanceEventHandler<CandlestickEvent> handler) {
         this.candlestickHandler = handler;
-        BinanceApiCallback<CandlestickEvent> callback = new BinanceApiCallbackWrapper<CandlestickEvent>() {
+        BinanceApiCallback<CandlestickEvent> callback = new UniverseApiCallback<CandlestickEvent>() {
             @Override
             public void onResponse(CandlestickEvent candlestickEvent) {
                 candlestickHandler.update(candlestickEvent.getSymbol(), candlestickEvent);
@@ -84,7 +84,7 @@ public class BinanceExchange {
     public void createLocalOrderBook(Set<String> symbols, int size) {
         this.orderBookMap = new ConcurrentHashMap<>(symbols.size() / 3 * 4);
         this.orderBookSize = size;
-        BinanceApiCallback<DepthEvent> callback = new BinanceApiCallbackWrapper<DepthEvent>() {
+        BinanceApiCallback<DepthEvent> callback = new UniverseApiCallback<DepthEvent>() {
             @Override
             public void onResponse(DepthEvent event) {
                 updateOrderBook(event);

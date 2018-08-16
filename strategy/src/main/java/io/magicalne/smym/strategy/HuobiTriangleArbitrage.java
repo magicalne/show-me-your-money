@@ -1,16 +1,14 @@
 package io.magicalne.smym.strategy;
 
 import io.magicalne.smym.dto.*;
-import io.magicalne.smym.exception.CancelOrderException;
 import io.magicalne.smym.exception.OrderPlaceException;
-import io.magicalne.smym.exchanges.HuobiProRest;
-import io.magicalne.smym.exchanges.HuobiProSubKlineWebSocket;
-import io.magicalne.smym.handler.SubEventHandler;
+import io.magicalne.smym.exchanges.HuobiExchange;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -20,33 +18,28 @@ public class HuobiTriangleArbitrage {
     private static final int TIMEOUT_TRADE = 10000;
     private static final String PARTIAL_CANCELED = "partial-canceled";
     private static final String CANCELED = "canceled";
+    private static final String PARTIAL_FILLED = "partial-filled";
     private static final String FILLED = "filled";
-    private final double buySlippage = 0.9998;
-    private final double sellSlippage = 1.0001;
+    private static final double UPPER_BOUND = 1.01;
+    private static final double BUY_SLIPPAGE = 0.9998;
+    private static final double SELL_SLIPPAGE = 1.0001;
 
-    private final HuobiProRest client;
-
-    private SubEventHandler subEventHandler;
+    private final HuobiExchange exchange;
     private List<Triangular> btcusdtPairList;
     private List<Triangular> ethusdtPairList;
     private List<Triangular> htusdtPairList;
     private final Map<String, Symbol> symbolMap = new HashMap<>();
 
-    private final OrderPlaceRequest sourceReq = new OrderPlaceRequest();
-    private final OrderPlaceRequest middleReq = new OrderPlaceRequest();
-    private final OrderPlaceRequest lastReq = new OrderPlaceRequest();
     private final String accountId;
 
-    public HuobiTriangleArbitrage(String accountId) {
+
+    public HuobiTriangleArbitrage(String accountId, String accessKey, String secretKey) {
         this.accountId = accountId;
-        this.sourceReq.setAccountId(accountId);
-        this.middleReq.setAccountId(accountId);
-        this.lastReq.setAccountId(accountId);
-        this.client = new HuobiProRest();
+        this.exchange = new HuobiExchange(accountId, accessKey, secretKey);
     }
 
     public void init() {
-        List<Symbol> symbols = this.client.getSymbols();
+        List<Symbol> symbols = this.exchange.getSymbolInfo();
         for (Symbol s : symbols) {
             symbolMap.put(s.getSymbol(), s);
         }
@@ -118,167 +111,320 @@ public class HuobiTriangleArbitrage {
         });
         this.htusdtPairList = htusdtPairList;
 
-        subEventHandler = new SubEventHandler(symbolSet.size());
-        HuobiProSubKlineWebSocket websocket = new HuobiProSubKlineWebSocket(symbolSet, "1min", subEventHandler);
-        websocket.init();
+        exchange.createOrderBook(symbolSet, 5);
     }
 
     public double getCapitalFromBalance(String currency) {
-        BalanceResponse balanceRes = client.balance(accountId);
+        BalanceResponse balanceRes = this.exchange.getAccount(accountId);
         List<BalanceBean> balances = balanceRes.getData().getList();
         double balance = -1;
         for (BalanceBean b : balances) {
             if (currency.equals(b.getCurrency())) {
                 balance = Double.parseDouble(b.getBalance());
-                log.info("Balance USDT: {}", balance);
+                log.info("Balance currency{}: {}", currency, balance);
                 break;
             }
         }
         return balance;
-
     }
 
-    private void run(String capital, boolean isTest) throws CancelOrderException, OrderPlaceException {
-        double capitalDouble = Double.parseDouble(capital);
+    private void run() {
+//        double capitalDouble = Double.parseDouble(capital);
 
-        capitalDouble = Math.min(capitalDouble, getCapitalFromBalance("usdt"));
-        double minVol = 7d;
-        Map<String, SubKlineRes> sub = subEventHandler.getSub();
+//        capitalDouble = Math.min(capitalDouble, getCapitalFromBalance("usdt"));
         for (;;) {
-            for (Triangular triangular : this.btcusdtPairList) {
-                if (!sub.containsKey(triangular.getSource())
-                        || !sub.containsKey(triangular.getMiddle())
-                        || !sub.containsKey(triangular.getLast())) {
-                    continue;
-                }
-                capitalDouble = strategy(isTest, capitalDouble, minVol, triangular);
+            findArbitrage(this.btcusdtPairList);
+            findArbitrage(this.ethusdtPairList);
+            findArbitrage(this.htusdtPairList);
+        }
+    }
+
+    private void findArbitrage(List<Triangular> pairList) {
+        for (Triangular triangular : pairList) {
+            final int priceLevel = 0;
+            Depth sourceDepth = this.exchange.getOrderBook(triangular.getSource());
+            Depth middleDepth = this.exchange.getOrderBook(triangular.getMiddle());
+            Depth lastDepth = this.exchange.getOrderBook(triangular.getLast());
+
+            if (sourceDepth == null || middleDepth == null || lastDepth == null) {
+                continue;
             }
-            for (Triangular triangular : this.ethusdtPairList) {
-                if (!sub.containsKey(triangular.getSource())
-                        || !sub.containsKey(triangular.getMiddle())
-                        || !sub.containsKey(triangular.getLast())) {
-                    continue;
-                }
-                capitalDouble = strategy(isTest, capitalDouble, minVol, triangular);
+            //clockwise
+            List<List<Double>> sourceDepthBids = sourceDepth.getBids();
+            List<List<Double>> middleDepthBids = middleDepth.getBids();
+            List<List<Double>> lastDepthAsks = lastDepth.getAsks();
+            double source = sourceDepthBids.get(priceLevel).get(0);
+            double middle = middleDepthBids.get(priceLevel).get(0);
+            double last = lastDepthAsks.get(priceLevel).get(0);
+            double profit = getClockwise(source * BUY_SLIPPAGE, middle * BUY_SLIPPAGE, last * SELL_SLIPPAGE);
+            if (profit > UPPER_BOUND) {
+                log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                        priceLevel+1,
+                        triangular.getSource(), source,
+                        triangular.getMiddle(), middle,
+                        triangular.getLast(), last,
+                        profit);
             }
-            for (Triangular triangular : this.htusdtPairList) {
-                if (!sub.containsKey(triangular.getSource())
-                        || !sub.containsKey(triangular.getMiddle())
-                        || !sub.containsKey(triangular.getLast())) {
-                    continue;
-                }
-                capitalDouble = strategy(isTest, capitalDouble, minVol, triangular);
+            //reverse clockwise
+            List<List<Double>> sourceDepthAsks = sourceDepth.getAsks();
+            List<List<Double>> middleDepthAsks = middleDepth.getAsks();
+            List<List<Double>> lastDepthBids = lastDepth.getBids();
+            source = sourceDepthAsks.get(priceLevel).get(0);
+            middle = middleDepthAsks.get(priceLevel).get(0);
+            last = lastDepthBids.get(priceLevel).get(0);
+            profit = getReverse(source * SELL_SLIPPAGE, middle * SELL_SLIPPAGE, last * BUY_SLIPPAGE);
+            if (profit > UPPER_BOUND) {
+                log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                        priceLevel+1,
+                        triangular.getSource(), source,
+                        triangular.getMiddle(), middle,
+                        triangular.getLast(), last,
+                        profit);
             }
         }
     }
 
-    private double strategy(boolean isTest, double capitalDouble, double minVol, Triangular triangular)
-            throws CancelOrderException, OrderPlaceException {
-        double upperBound = 1.01;
-        double underBound = 0.98;
-        Map<String, SubKlineRes> sub = subEventHandler.getSub();
-        double source = sub.get(triangular.getSource()).getTick().getClose();
-        double middle = sub.get(triangular.getMiddle()).getTick().getClose();
-        double last = sub.get(triangular.getLast()).getTick().getClose();
-        double lastAmount = sub.get(triangular.getLast()).getTick().getAmount();
-        double lastVol = sub.get(triangular.getLast()).getTick().getVol();
-        double diff = last / (source * middle) * TRIPLE_COMMISSION;
-        if (lastVol > minVol && (diff >= upperBound || diff <= underBound)) {
-            sub.remove(triangular.getSource());
-            sub.remove(triangular.getMiddle());
-            sub.remove(triangular.getLast());
-            log.info("{} : source: {}, middle: {}, last: {}, diff: {}, last amount: {}, last vol: {}",
-                    triangular, source, middle, last, diff, lastAmount, lastVol);
-            boolean clockwise = diff >= upperBound;
-            if (isTest) {
-                capitalDouble = orderTest(capitalDouble, source, middle, last, lastVol, clockwise);
-            } else {
-                capitalDouble = order(capitalDouble < lastVol ? capitalDouble : lastVol,
-                        triangular.getSource(), triangular.getMiddle(), triangular.getLast(),
-                        source, middle, last, clockwise);
-                capitalDouble = Math.min(capitalDouble, getCapitalFromBalance("usdt"));
-            }
-        }
-        return capitalDouble;
-    }
+    private void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                        String quoteQty, boolean clockwise) throws InterruptedException {
 
-    private double order(double capital, String source, String middle, String last,
-                         double sourcePrice, double middlePrice, double lastPrice, boolean clockwise)
-            throws CancelOrderException, OrderPlaceException {
         if (clockwise) {
-            log.info("Clockwise trade.");
-            double sourceAmount = buyLimit(sourceReq, capital, sourcePrice, source);
-            double middleAmount = buyLimit(middleReq, sourceAmount, middlePrice, middle);
-            double lastAmount = sellLimit(lastReq, middleAmount, lastPrice, last);
-            log.info("Capital was {}, now capital is : {}, profit: {}", capital, lastAmount, lastAmount-capital);
-            return lastAmount;
-        } else {
-            log.info("Reverse clockwise trade.");
-            double lastAmount = buyLimit(lastReq, capital, lastPrice, last);
-            double middleAmount = sellLimit(middleReq, lastAmount, middlePrice, middle);
-            double sourceAmount = sellLimit(sourceReq, middleAmount, sourcePrice, source);
-            log.info("Capital was {}, now capital is : {}, profit: {}", capital, sourceAmount, sourceAmount-capital);
-            return sourceAmount;
+            TradeInfo firstRound = firstRoundBuy(triangular.getSource(), sourcePrice, quoteQty);
+            if (firstRound == null) {
+                return;
+            }
+            TradeInfo secondRound = secondRoundBuy(triangular.getMiddle(), middlePrice, firstRound.getQty());
+            TradeInfo finalQuoteQty = thirdRoundSell(triangular.getLast(), lastPrice, secondRound.getQty());
+            BigDecimal finalQty = finalQuoteQty.getQty();
+            BigDecimal profit = finalQty.divide(new BigDecimal(quoteQty), 5);
+            log.info("Actually, the return of this round: {}", profit.toPlainString());
         }
     }
 
-    public double buyLimit(OrderPlaceRequest req, double capital, double price, String symbol)
-            throws OrderPlaceException, CancelOrderException {
-        Symbol s = symbolMap.get(symbol);
-        int amountPrecision = s.getAmountPrecision();
-        int pricePrecision = s.getPricePrecision();
+    private TradeInfo firstRoundBuy(String symbol, double price, String quoteQty) {
+        Symbol symbolInfo = this.symbolMap.get(symbol);
+        int basePrecision = symbolInfo.getAmountPrecision();
+        int quotePrecision = symbolInfo.getPricePrecision();
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
+        BigDecimal q = new BigDecimal(quoteQty).setScale(quotePrecision, RoundingMode.DOWN);
+        BigDecimal qty = q.divide(p, basePrecision);
 
-        BigDecimal slippagePrice = round(price*sellSlippage, pricePrecision);
+        OrderPlaceResponse res = this.exchange.limitBuy(symbol, qty.toPlainString(), p.toPlainString());
+        if (res.checkStatusOK()) {
+            String orderId = res.getData();
+            long record = System.currentTimeMillis();
+            OrderDetail detail;
+            for (;;) {
+                detail = this.exchange.queryOrder(orderId);
+                String state = detail.getState();
+                if (FILLED.equals(state) || PARTIAL_FILLED.equals(state)) {
+                    break;
+                }
+                if (System.currentTimeMillis() - record > 5000) {
+                    detail = this.exchange.cancel(orderId);
+                    break;
+                }
+            }
+            if (FILLED.equals(detail.getState()) || PARTIAL_CANCELED.equals(detail.getState())) {
+                return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, true);
+            }
+        }
+        return null;
+    }
 
-        BigDecimal amount = round(capital/slippagePrice.doubleValue(), amountPrecision);
+    private TradeInfo secondRoundBuy(String symbol, double price, BigDecimal quoteQty) throws InterruptedException {
+        Symbol symbolInfo = this.symbolMap.get(symbol);
+        int basePrecision = symbolInfo.getAmountPrecision();
+        int quotePrecision = symbolInfo.getPricePrecision();
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
+        BigDecimal qty = quoteQty.divide(p, basePrecision);
 
-        req.setAmount(amount.toPlainString());
-        req.setPrice(slippagePrice.toPlainString());
-        req.setSymbol(symbol);
-        req.setType(OrderType.BUY_LIMIT.getType());
-
-        OrderPlaceResponse res = this.client.orderPlace(req);
-        for (int i = 0; i < 3; i ++) {
-            if (res.checkStatusOK()) {
-                String orderId = res.getData();
-                long start = System.currentTimeMillis();
-                long roundStart = start;
-                for (;;) {
-                    long round = System.currentTimeMillis();
-                    if (round - roundStart < 500) {
-                        continue;
-                    } else {
-                        roundStart = round;
-                    }
-                    OrdersDetailResponse ordersDetailResponse = this.client.ordersDetail(orderId);
-                    if (ordersDetailResponse.checkStatusOK()) {
-                        OrderDetail detail = ordersDetailResponse.getData();
-                        String state = detail.getState();
-                        if (FILLED.equals(state)) {
-                            double baseAmount = Double.parseDouble(detail.getFieldAmount());
-                            double fee = Double.parseDouble(detail.getFieldFees());
-                            return baseAmount - fee;
-                        } else {
-                            //buy market
-                            if (System.currentTimeMillis() - start > TIMEOUT_TRADE) {
-                                OrderDetail cancel = cancel(orderId);
-                                if (PARTIAL_CANCELED.equals(cancel.getState())) {
-                                    double partialAmount = Double.parseDouble(cancel.getFieldAmount());
-                                    double quote = Double.parseDouble(cancel.getFieldCashAmount());
-                                    double partialFee = Double.parseDouble(cancel.getFieldFees());
-
-                                    BigDecimal capLeft = round(capital - quote, pricePrecision);
-                                    return buyMarket(req, capLeft.toPlainString(), symbol) + partialAmount - partialFee;
-                                } else {
-                                    return buyMarket(req, round(capital, pricePrecision).toPlainString(), symbol);
-                                }
-                            }
+        OrderPlaceResponse res = this.exchange.limitBuy(symbol, qty.toPlainString(), p.toPlainString());
+        if (res.checkStatusOK()) {
+            String orderId = res.getData();
+            long record = System.currentTimeMillis();
+            OrderDetail detail;
+            for (;;) {
+                detail = this.exchange.queryOrder(orderId);
+                String state = detail.getState();
+                if (FILLED.equals(state)) {
+                    break;
+                }
+                if (System.currentTimeMillis() - record > 5000) {
+                    double newBid = getTopBidPriceFromOrderBook(symbol);
+                    if (newBid > 0 && newBid*BUY_SLIPPAGE > price){
+                        detail = this.exchange.cancel(orderId);
+                        break;
+                    } else { //price has advantage, so wait more time
+                        if (System.currentTimeMillis() - record > 10) {
+                            detail = this.exchange.cancel(orderId);
+                            break;
                         }
                     }
+                    TimeUnit.MILLISECONDS.sleep(200);
                 }
             }
+            String state = detail.getState();
+            if (FILLED.equals(state)) {
+                return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, true);
+            } else if (CANCELED.equals(state)) {
+                //market buy
+                OrderDetail marketBuy = this.exchange.marketBuy(symbol, quoteQty.toPlainString());
+                return getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision, true);
+            } else if (PARTIAL_CANCELED.equals(state)) {
+                BigDecimal filledPart = new BigDecimal(detail.getFieldAmount())
+                        .setScale(quotePrecision, RoundingMode.DOWN);
+                BigDecimal partQuoteQty = new BigDecimal(detail.getFieldCashAmount())
+                        .setScale(quotePrecision, RoundingMode.DOWN);
+                BigDecimal fees = new BigDecimal(detail.getFieldFees())
+                        .setScale(quotePrecision, RoundingMode.DOWN);
+                BigDecimal leftQuoteQty = quoteQty.subtract(partQuoteQty).subtract(fees);
+                //market buy
+                OrderDetail marketBuy = this.exchange.marketBuy(symbol, leftQuoteQty.toPlainString());
+                TradeInfo marketBuyTradeInfo = getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision, true);
+                BigDecimal marketBuyBaseQty = new BigDecimal(marketBuy.getFieldAmount())
+                        .setScale(basePrecision, RoundingMode.DOWN);
+                BigDecimal totalBaseQty = filledPart.add(marketBuyBaseQty);
+                marketBuyTradeInfo.setQty(totalBaseQty);
+                BigDecimal finalPrice = quoteQty.divide(totalBaseQty, quotePrecision);
+                marketBuyTradeInfo.setPrice(finalPrice);
+                return marketBuyTradeInfo;
+            }
+        } else {
+            return secondRoundBuy(symbol, price, quoteQty);
         }
-        throw new OrderPlaceException(req.toString());
+        throw new OrderPlaceException(res.toString());
+    }
+
+    private TradeInfo thirdRoundSell(String symbol, double price, BigDecimal baseQty) throws InterruptedException {
+        Symbol symbolInfo = this.symbolMap.get(symbol);
+        int basePrecision = symbolInfo.getAmountPrecision();
+        int quotePrecision = symbolInfo.getPricePrecision();
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
+        OrderPlaceResponse res = this.exchange.limitSell(symbol, baseQty.toPlainString(), p.toPlainString());
+        if (res.checkStatusOK()) {
+            String orderId = res.getData();
+            long start = System.currentTimeMillis();
+            for (;;) {
+                OrderDetail detail = this.exchange.queryOrder(orderId);
+                String state = detail.getState();
+                if (FILLED.equals(state)) {
+                    return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, false);
+                }
+                TimeUnit.SECONDS.sleep(1);
+                if (System.currentTimeMillis() - start > 600000) {//10min
+                    break;
+                }
+            }
+            OrderDetail cancel = this.exchange.cancel(orderId);
+            BigDecimal soldQty = null;
+            if (PARTIAL_CANCELED.equals(cancel.getState())) {
+                BigDecimal partialBase = new BigDecimal(cancel.getFieldAmount())
+                        .setScale(basePrecision, RoundingMode.DOWN);
+                baseQty = baseQty.subtract(partialBase);
+                soldQty = getQuoteQtyFromOrder(cancel, quotePrecision, RoundingMode.DOWN);
+            }
+            OrderDetail marketSell = this.exchange.marketSell(symbol, baseQty.toPlainString());
+            BigDecimal marketSellQuoteQty = getQuoteQtyFromOrder(marketSell, quotePrecision, RoundingMode.DOWN);
+            TradeInfo tradeInfo = new TradeInfo();
+            if (soldQty != null) {
+                BigDecimal totalQuoteQty = marketSellQuoteQty.add(soldQty);
+                BigDecimal finalPrice = totalQuoteQty.divide(baseQty, quotePrecision);
+                tradeInfo.setPrice(finalPrice);
+                tradeInfo.setQty(totalQuoteQty);
+            } else {
+                tradeInfo.setPrice(new BigDecimal(marketSell.getPrice()).setScale(quotePrecision, RoundingMode.DOWN));
+                tradeInfo.setQty(marketSellQuoteQty);
+            }
+            return tradeInfo;
+
+        } else {
+            return thirdRoundSell(symbol, price, baseQty);
+        }
+    }
+
+    private TradeInfo getTradeInfoFromOrder(OrderDetail detail, int basePrecision, int quotePrecision, boolean isBuy) {
+        BigDecimal quotePrice = new BigDecimal(detail.getPrice())
+                .setScale(quotePrecision, RoundingMode.UP);
+        TradeInfo tradeInfo = new TradeInfo();
+        tradeInfo.setPrice(quotePrice);
+        if (isBuy) {
+            BigDecimal baseQty = new BigDecimal(detail.getFieldAmount()).setScale(basePrecision, RoundingMode.DOWN);
+            tradeInfo.setQty(baseQty);
+        } else {
+            BigDecimal quoteQty = getQuoteQtyFromOrder(detail, quotePrecision, RoundingMode.DOWN);
+            tradeInfo.setQty(quoteQty);
+        }
+        return tradeInfo;
+    }
+
+    private BigDecimal getQuoteQtyFromOrder(OrderDetail detail, int quotePrecision, RoundingMode mode) {
+        BigDecimal quote = new BigDecimal(detail.getFieldCashAmount())
+                .setScale(quotePrecision, mode);
+        BigDecimal fees = new BigDecimal(detail.getFieldFees())
+                .setScale(quotePrecision, mode);
+        return quote.subtract(fees);
+    }
+
+    private int getAskPriceLevelFromOrderBook(String symbol, double price) {
+        Depth orderBook = this.exchange.getOrderBook(symbol);
+        List<List<Double>> asks = orderBook.getAsks();
+        if (asks != null && !asks.isEmpty()) {
+            int i = 0;
+            for (; i < asks.size(); i ++) {
+                Double p = asks.get(i).get(0);
+                if (price > p) {
+                    return i;
+                }
+            }
+            return i;
+        }
+        return -1;
+    }
+
+    private int getBidPriceLevelFromOrderBook(String symbol, double price) {
+        Depth orderBook = this.exchange.getOrderBook(symbol);
+        List<List<Double>> bids = orderBook.getBids();
+        if (bids != null && !bids.isEmpty()) {
+            int i = 0;
+            for (; i < bids.size(); i ++) {
+                Double p = bids.get(i).get(0);
+                if (price < p) {
+                    return i;
+                }
+            }
+            return i;
+        }
+        return -1;
+    }
+
+    private double getTopBidPriceFromOrderBook(String symbol) {
+        Depth orderBook = this.exchange.getOrderBook(symbol);
+        List<List<Double>> bids = orderBook.getBids();
+        if (bids != null && !bids.isEmpty()) {
+            return bids.get(0).get(0);
+        } else {
+            return -1;
+        }
+    }
+
+    private double getMeanBidBetweenPriceLevel(String symbol, int lvl1, int lvl2) {
+        Depth orderBook = this.exchange.getOrderBook(symbol);
+        List<List<Double>> bids = orderBook.getBids();
+        if (bids.size() > lvl2) {
+            Double p1 = bids.get(lvl1).get(0);
+            Double p2 = bids.get(lvl2).get(0);
+            return (p1+p2)/2;
+        } else {
+            return -1;
+        }
+    }
+
+    private double getReverse(double source, double middle, double last) {
+        return middle * source / last * TRIPLE_COMMISSION;
+    }
+
+    private double getClockwise(double source, double middle, double last) {
+        return last / (source * middle) * TRIPLE_COMMISSION;
     }
 
     public static BigDecimal round(double value, int places) {
@@ -289,191 +435,13 @@ public class HuobiTriangleArbitrage {
         return bd;
     }
 
-    private double buyMarket(OrderPlaceRequest req, String capital, String symbol) throws OrderPlaceException {
-
-        req.setAmount(capital);
-        req.setPrice(null);
-        req.setType(OrderType.BUY_MARKET.getType());
-        req.setSymbol(symbol);
-        OrderPlaceResponse orderPlaceResponse = this.client.orderPlace(req);
-        for (int i = 0; i < 3; i ++) {
-            if (orderPlaceResponse.checkStatusOK()) {
-                long start = System.currentTimeMillis();
-                for (; ; ) {
-                    long round = System.currentTimeMillis();
-                    if (round - start < 500) {
-                        continue;
-                    } else {
-                        start = round;
-                    }
-                    String orderId = orderPlaceResponse.getData();
-                    OrdersDetailResponse order = this.client.ordersDetail(orderId);
-                    if (order.checkStatusOK()) {
-                        OrderDetail detail = order.getData();
-                        if (FILLED.equals(detail.getState())) {
-                            log.info("buy market: {}", detail);
-                            double fieldAmount = Double.parseDouble(detail.getFieldAmount());
-                            double fee = Double.parseDouble(detail.getFieldFees());
-                            return fieldAmount - fee;
-                        }
-                    }
-                }
-            }
-        }
-        throw new OrderPlaceException(req.toString());
-    }
-
-    public double sellLimit(OrderPlaceRequest req, double capital, double price, String symbol)
-            throws OrderPlaceException, CancelOrderException {
-        Symbol s = symbolMap.get(symbol);
-        int amountPrecision = s.getAmountPrecision();
-        int pricePrecision = s.getPricePrecision();
-
-        BigDecimal slippagePrice = round(price*buySlippage, pricePrecision);
-
-
-        BigDecimal capitalBD = round(capital, amountPrecision);
-        req.setAmount(capitalBD.toPlainString());
-        req.setPrice(slippagePrice.toPlainString());
-        req.setSymbol(symbol);
-        req.setType(OrderType.SELL_LIMIT.getType());
-
-        OrderPlaceResponse res = this.client.orderPlace(req);
-        for (int i = 0; i < 3; i ++) {
-            if (res.checkStatusOK()) {
-                String orderId = res.getData();
-                long start = System.currentTimeMillis();
-                long roundStart = start;
-                for (; ; ) {
-                    long round = System.currentTimeMillis();
-                    if (round - roundStart < 500) {
-                        continue;
-                    } else {
-                        roundStart = round;
-                    }
-                    OrdersDetailResponse ordersDetailResponse = this.client.ordersDetail(orderId);
-                    if (ordersDetailResponse.checkStatusOK()) {
-                        OrderDetail detail = ordersDetailResponse.getData();
-                        String state = detail.getState();
-                        if (FILLED.equals(state)) {
-                            double quote = Double.parseDouble(detail.getFieldCashAmount());
-                            double fee = Double.parseDouble(detail.getFieldFees());
-                            return quote - fee;
-                        } else {
-                            if (System.currentTimeMillis() - start > TIMEOUT_TRADE) {
-                                OrderDetail cancel = cancel(orderId);
-                                if (PARTIAL_CANCELED.equals(cancel.getState())) {
-
-                                    double partialAmount = Double.parseDouble(cancel.getFieldCashAmount());
-                                    double base = Double.parseDouble(cancel.getFieldAmount());
-                                    double partialFee = Double.parseDouble(cancel.getFieldFees());
-
-                                    BigDecimal capLeft = round(capitalBD.doubleValue() - base, amountPrecision);
-                                    return sellMarket(req, capLeft.toPlainString(), symbol) + partialAmount - partialFee;
-
-                                } else {
-                                    return sellMarket(req, round(capital, amountPrecision).toPlainString(), symbol);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        throw new OrderPlaceException(req.toString());
-    }
-
-    private double sellMarket(OrderPlaceRequest req, String capital, String symbol) throws OrderPlaceException {
-        req.setAmount(capital);
-        req.setPrice(null);
-        req.setType(OrderType.SELL_MARKET.getType());
-        req.setSymbol(symbol);
-        OrderPlaceResponse orderPlaceResponse = this.client.orderPlace(req);
-        for (int i = 0; i < 3; i ++) {
-            if (orderPlaceResponse.checkStatusOK()) {
-                long start = System.currentTimeMillis();
-                for (; ; ) {
-                    long round = System.currentTimeMillis();
-                    if (round - start < 500) {
-                        continue;
-                    } else {
-                        start = round;
-                    }
-                    String orderId = orderPlaceResponse.getData();
-                    OrdersDetailResponse order = this.client.ordersDetail(orderId);
-
-                    if (order.checkStatusOK()) {
-                        OrderDetail detail = order.getData();
-                        if (FILLED.equals(detail.getState())) {
-                            log.info("sell market: {}", detail);
-                            double fieldAmount = Double.parseDouble(detail.getFieldCashAmount());
-                            double fee = Double.parseDouble(detail.getFieldFees());
-                            return fieldAmount - fee;
-                        }
-                    }
-                }
-            }
-        }
-        throw new OrderPlaceException(req.toString());
-    }
-
-    private OrderDetail cancel(String orderId) throws CancelOrderException {
-        SubmitCancelResponse cancel = this.client.submitcancel(orderId);
-        if (cancel.checkStatusOK()) {
-            long start = System.currentTimeMillis();
-            for (;;) {
-                long round = System.currentTimeMillis();
-                if (round - start < 500) {
-                    continue;
-                } else {
-                    start = round;
-                }
-                OrdersDetailResponse ordersDetailResponse = this.client.ordersDetail(orderId);
-                if (ordersDetailResponse.checkStatusOK()) {
-                    OrderDetail detail = ordersDetailResponse.getData();
-                    String state = detail.getState();
-                    if (PARTIAL_CANCELED.equals(state) || CANCELED.equals(state)) {
-                        log.info("cancel: {}", ordersDetailResponse);
-                        return detail;
-                    }
-                }
-            }
-        }
-        throw new CancelOrderException(orderId);
-    }
-
-    double orderTest(double capital,
-                     double source,
-                     double middle,
-                     double last,
-                     double lastVol,
-                     boolean clockwise) {
-        double c = capital;
-        double amount;
-        if (lastVol < c) {
-            amount = lastVol;
-        } else {
-            amount = c;
-        }
-        double result;
-        //amount / source / middle * last * 0.998^3
-        if (clockwise) {
-            result = amount/(source*buySlippage*middle*buySlippage)*last*sellSlippage*TRIPLE_COMMISSION;
-        } else {
-            result = amount/last*buySlippage*middle*sellSlippage*source*sellSlippage*TRIPLE_COMMISSION;
-        }
-        double profit = result - amount;
-        c = capital + profit;
-        log.info("Init capital: {}. The profit of this round trade: {}, total capital: {}, return rate: {}",
-                capital, profit, c, profit/capital);
-        return c;
-    }
-
     public static void main(String[] args) {
         try {
-            HuobiTriangleArbitrage strategy = new HuobiTriangleArbitrage("2672827");
+            String accessKeyId = System.getenv("HUOBI_ACCESS_KEY");
+            String accessKeySecret = System.getenv("HUOBI_ACCESS_KEY_SECRET");
+            HuobiTriangleArbitrage strategy = new HuobiTriangleArbitrage("2672827", accessKeyId, accessKeySecret);
             strategy.init();
-            strategy.run(args[0], Boolean.parseBoolean(args[1]));
+            strategy.run();
         } catch (Exception e) {
             log.info("Exception happened. Stop trading.", e);
         }

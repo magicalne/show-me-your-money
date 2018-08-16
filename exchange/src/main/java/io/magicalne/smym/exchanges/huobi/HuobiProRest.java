@@ -1,4 +1,4 @@
-package io.magicalne.smym.exchanges;
+package io.magicalne.smym.exchanges.huobi;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -49,12 +49,6 @@ public class HuobiProRest {
     private final String accessKeyId;
     private final String accessKeySecret;
     private final String assetPassword;
-
-    public HuobiProRest() {
-        this.accessKeyId = System.getenv("HUOBI_ACCESS_KEY");
-        this.accessKeySecret = System.getenv("HUOBI_ACCESS_KEY_SECRET");
-        this.assetPassword = null;
-    }
 
     public HuobiProRest(String accessKey, String accessKeySecret) {
         this.accessKeyId = accessKey;
@@ -167,7 +161,7 @@ public class HuobiProRest {
         map.put("symbol", request.getSymbol());
         map.put("type", request.getType());
 
-        return get("/market/depth", map, new TypeReference<DepthResponse<List<Depth>>>() {});
+        return get("/market/depth", map, new TypeReference<DepthResponse>() {});
     }
 
     /**
