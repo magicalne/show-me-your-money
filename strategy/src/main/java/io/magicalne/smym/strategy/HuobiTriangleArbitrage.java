@@ -246,7 +246,7 @@ public class HuobiTriangleArbitrage {
         int quotePrecision = symbolInfo.getPricePrecision();
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
         BigDecimal q = new BigDecimal(quoteQty).setScale(quotePrecision, RoundingMode.DOWN);
-        BigDecimal qty = q.divide(p, quotePrecision).setScale(quotePrecision, RoundingMode.DOWN);
+        BigDecimal qty = q.divide(p, quotePrecision).setScale(basePrecision, RoundingMode.DOWN);
 
         String qtyStr = qty.toPlainString();
         String priceStr = p.toPlainString();
