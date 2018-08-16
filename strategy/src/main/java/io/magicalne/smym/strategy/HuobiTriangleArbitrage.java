@@ -122,6 +122,7 @@ public class HuobiTriangleArbitrage {
         String balance = getCapitalFromBalance("usdt");
         double b = Double.parseDouble(balance);
         this.capital = c > b ? balance : capital;
+        log.info("Use capital: {}", this.capital);
         for (;;) {
             findArbitrage(this.btcusdtPairList);
             findArbitrage(this.ethusdtPairList);
@@ -236,6 +237,7 @@ public class HuobiTriangleArbitrage {
         String balance = getCapitalFromBalance("usdt");
         double b = Double.parseDouble(balance);
         this.capital = Double.parseDouble(this.capital) > b ? balance : capital;
+        log.info("Use capital: {}", this.capital);
     }
 
     private TradeInfo firstRoundBuy(String symbol, double price, String quoteQty) {
