@@ -327,7 +327,7 @@ public class HuobiTriangleArbitrage {
                 return marketBuyTradeInfo;
             }
         } else {
-            log.error("Failed to buy. symbol: {}, qty: {} @price: {]", symbol, qtyStr, priceStr);
+            log.error("Failed to buy. symbol: {}, qty: {} @price: {}, res: {}", symbol, qtyStr, priceStr, res);
             return secondRoundBuy(symbol, price, quoteQty);
         }
         throw new OrderPlaceException(res.toString());
@@ -379,7 +379,7 @@ public class HuobiTriangleArbitrage {
             return tradeInfo;
 
         } else {
-            log.error("Failed to sell. symbol: {}, qty: {} @price: {]", symbol, baseQtyStr, priceStr);
+            log.error("Failed to sell. symbol: {}, qty: {} @price: {}, res: {}", symbol, baseQtyStr, priceStr, res);
             return sell(symbol, price, baseQty, timeout);
         }
     }
