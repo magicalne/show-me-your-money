@@ -35,7 +35,7 @@ public class HuobiApiWebSocketListener<T> extends WebSocketListener {
                 webSocket.send(res.replace(ping, "pong"));
             } else if (res.contains("subbed")) {
                 log.info(res);
-            }else {
+            } else {
                 T event = objectMapper.readValue(res, this.eventClass);
                 this.callback.onResponse(event);
             }

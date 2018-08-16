@@ -22,11 +22,11 @@ public class TriangleArbitrageTest {
         String secretKey = System.getenv("BINANCE_ACCESS_SECRET_KEY");
         HuobiExchange huobiExchange = new HuobiExchange(ACCOUNT_ID, accessKey, secretKey);
         Set<String> symbols = new HashSet<>();
-        symbols.add("btcusdt");
+        symbols.add("leteth");
         huobiExchange.createOrderBook(symbols, 5);
 
         for (;;) {
-            Depth depth = huobiExchange.getOrderBook("btcusdt");
+            Depth depth = huobiExchange.getOrderBook("leteth");
             if (depth == null) {
                 continue;
             }

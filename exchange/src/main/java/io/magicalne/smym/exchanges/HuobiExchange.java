@@ -47,18 +47,19 @@ public class HuobiExchange {
     public void createOrderBook(Set<String> symbols, int size) {
         this.orderBookMap = new ConcurrentHashMap<>(symbols.size() / 3 * 4);
         this.orderBookSize = size;
-        UniverseApiCallback<DepthResponse> callback = new UniverseApiCallback<DepthResponse>() {
-            @Override
-            public void onResponse(DepthResponse depth) {
-                String ch = depth.getCh();
-                String symbolFromTopic = getSymbolFromTopic(ch);
-                updateOrderBook(symbolFromTopic, depth.getTick());
-            }
-        };
+
         for (String symbol : symbols) {
+            UniverseApiCallback<DepthResponse> callback = new UniverseApiCallback<DepthResponse>() {
+                @Override
+                public void onResponse(DepthResponse depth) {
+                    String ch = depth.getCh();
+                    String symbolFromTopic = getSymbolFromTopic(ch);
+                    updateOrderBook(symbolFromTopic, depth.getTick());
+                }
+            };
             this.webSocketClient.onDepthEvent(symbol, callback);
             try {
-                Thread.sleep(100);
+                Thread.sleep(500);
             } catch (InterruptedException e) {
                 log.error("Thread sleep with interrupted exception.", e);
             }
