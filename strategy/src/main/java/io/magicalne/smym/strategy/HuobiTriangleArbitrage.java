@@ -153,6 +153,11 @@ public class HuobiTriangleArbitrage {
             List<List<Double>> sourceDepthBids = sourceDepth.getBids();
             List<List<Double>> middleDepthBids = middleDepth.getBids();
             List<List<Double>> lastDepthAsks = lastDepth.getAsks();
+            if (sourceDepthBids.size() < priceLevel+1 ||
+                    middleDepthBids.size() < priceLevel+1 ||
+                    lastDepthAsks.size() < priceLevel+1) {
+                continue;
+            }
             double source = sourceDepthBids.get(priceLevel).get(0) * BUY_SLIPPAGE;
             double middle = middleDepthBids.get(priceLevel).get(0) * BUY_SLIPPAGE;
             double last = lastDepthAsks.get(priceLevel).get(0) * SELL_SLIPPAGE;
