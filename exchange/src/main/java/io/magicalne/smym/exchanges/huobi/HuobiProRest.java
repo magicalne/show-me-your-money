@@ -372,6 +372,7 @@ public class HuobiProRest {
                        TypeReference<T> ref) {
         ApiSignature sign = new ApiSignature();
         sign.createSignature(this.accessKeyId, this.accessKeySecret, method, API_HOST, uri, params);
+        String s = null;
         try {
             Request.Builder builder;
             if ("POST".equals(method)) {
@@ -385,9 +386,10 @@ public class HuobiProRest {
             }
             Request request = builder.build();
             Response response = client.newCall(request).execute();
-            String s = response.body().string();
+            s = response.body().string();
             return JsonUtil.readValue(s, ref);
         } catch (IOException e) {
+            log.error("API exception! request: {}, response: {}", object, s);
             throw new ApiException(e);
         }
     }

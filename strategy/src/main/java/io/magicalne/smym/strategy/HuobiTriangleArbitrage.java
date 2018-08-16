@@ -44,15 +44,6 @@ public class HuobiTriangleArbitrage {
         for (Symbol s : symbols) {
             symbolMap.put(s.getSymbol(), s);
         }
-//
-//        Map<Symbol, Double> symbolWithVolume = new HashMap<>();
-//        for (Symbol symbol : symbols) {
-//            DetailResponse<Details> detail = this.client.detail(symbol.getSymbol());
-//            Details tick = detail.getTick();
-//            double vol = tick.getVol();
-//            symbolWithVolume.put(symbol, vol);
-//        }
-//
 
         Map<String, List<Symbol>> quoteGroup =
                 symbols.stream().collect(Collectors.groupingBy(Symbol::getQuoteCurrency));
@@ -70,12 +61,12 @@ public class HuobiTriangleArbitrage {
         List<Triangular> htusdtPairList = new LinkedList<>();
         String htusdt = "htusdt";
         for (Symbol u : usdtGrp) {
-//            for (Symbol b : btcGrp) {
-//                if (u.getBaseCurrency().equals(b.getBaseCurrency())) {
-//                    Triangular triangular = new Triangular(btcusdt, b.getBaseCurrency() + "btc", b.getBaseCurrency() + "usdt");
-//                    btcusdtPairList.add(triangular);
-//                }
-//            }
+            for (Symbol b : btcGrp) {
+                if (u.getBaseCurrency().equals(b.getBaseCurrency())) {
+                    Triangular triangular = new Triangular(btcusdt, b.getBaseCurrency() + "btc", b.getBaseCurrency() + "usdt");
+                    btcusdtPairList.add(triangular);
+                }
+            }
 
             for (Symbol e : ethGrp) {
                 if (u.getBaseCurrency().equals(e.getBaseCurrency())) {
@@ -83,13 +74,13 @@ public class HuobiTriangleArbitrage {
                     ethusdtPairList.add(triangular);
                 }
             }
-//
-//            for (Symbol h : htGrp) {
-//                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
-//                    Triangular triangular = new Triangular(htusdt, h.getBaseCurrency() + "ht", h.getBaseCurrency() + "usdt");
-//                    htusdtPairList.add(triangular);
-//                }
-//            }
+
+            for (Symbol h : htGrp) {
+                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
+                    Triangular triangular = new Triangular(htusdt, h.getBaseCurrency() + "ht", h.getBaseCurrency() + "usdt");
+                    htusdtPairList.add(triangular);
+                }
+            }
         }
 
         Set<String> symbolSet = new HashSet<>();
@@ -163,13 +154,13 @@ public class HuobiTriangleArbitrage {
             double last = lastDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
             double profit = getClockwise(source, middle, last);
             if (profit > UPPER_BOUND) {
+                log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                        priceLevel+1,
+                        triangular.getSource(), source,
+                        triangular.getMiddle(), middle,
+                        triangular.getLast(), last,
+                        profit);
                 try {
-                    log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
-                            priceLevel+1,
-                            triangular.getSource(), source,
-                            triangular.getMiddle(), middle,
-                            triangular.getLast(), last,
-                            profit);
                     takeIt(triangular, source, middle, last, this.capital, true);
                 } catch (InterruptedException e) {
                     log.error("InterruptedException.", e);
@@ -190,6 +181,12 @@ public class HuobiTriangleArbitrage {
                         triangular.getMiddle(), middle,
                         triangular.getLast(), last,
                         profit);
+                try {
+                    takeIt(triangular, source, middle, last, this.capital, false);
+                } catch (InterruptedException e) {
+                    log.error("InterruptedException.", e);
+                }
+
             }
         }
     }
@@ -197,10 +194,13 @@ public class HuobiTriangleArbitrage {
     public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
                         String quoteQty, boolean clockwise) throws InterruptedException {
 
+        int tenMin = 600000;
+        TradeInfo finalRound;
         if (clockwise) {
             TradeInfo firstRound = null;
             try {
                 firstRound = firstRoundBuy(triangular.getSource(), sourcePrice, quoteQty);
+                log.info("Buy first round was done. {}", firstRound);
             } catch (Exception e) {
                 log.error("Exception happened in first round. Buy:{}@{} qty:{}. {}",
                         triangular.getSource(), sourcePrice, quoteQty, e);
@@ -209,11 +209,30 @@ public class HuobiTriangleArbitrage {
                 return;
             }
             TradeInfo secondRound = secondRoundBuy(triangular.getMiddle(), middlePrice, firstRound.getQty());
-            TradeInfo finalQuoteQty = thirdRoundSell(triangular.getLast(), lastPrice, secondRound.getQty());
-            BigDecimal finalQty = finalQuoteQty.getQty();
-            BigDecimal profit = finalQty.divide(new BigDecimal(quoteQty), 5);
-            log.info("Actually, the return of this round: {}", profit.toPlainString());
+            log.info("Buy second round was done. {}", secondRound);
+            finalRound = sell(triangular.getLast(), lastPrice, secondRound.getQty(), tenMin);
+            log.info("Sell final round was done. {}", finalRound);
+
+        } else {
+            TradeInfo firstRound = null;
+            try {
+                firstRound = firstRoundBuy(triangular.getLast(), lastPrice, quoteQty);
+                log.info("Buy first round was done. {}", firstRound);
+            } catch (Exception e) {
+                log.error("Exception happened in first round. Buy:{}@{} qty:{}. {}",
+                        triangular.getLast(), lastPrice, quoteQty, e);
+            }
+            if (firstRound == null) {
+                return;
+            }
+            TradeInfo secondRound = sell(triangular.getMiddle(), middlePrice, firstRound.getQty(), 10000);
+            log.info("Sell second round was done. {}", secondRound);
+            finalRound = sell(triangular.getSource(), sourcePrice, secondRound.getQty(), tenMin);
+            log.info("Sell final round was done. {}", finalRound);
         }
+        BigDecimal finalQty = finalRound.getQty();
+        BigDecimal profit = finalQty.divide(new BigDecimal(quoteQty), 5);
+        log.info("Actually, the return of this round: {}", profit.toPlainString());
     }
 
     private TradeInfo firstRoundBuy(String symbol, double price, String quoteQty) {
@@ -254,7 +273,9 @@ public class HuobiTriangleArbitrage {
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
         BigDecimal qty = quoteQty.divide(p, basePrecision);
 
-        OrderPlaceResponse res = this.exchange.limitBuy(symbol, qty.toPlainString(), p.toPlainString());
+        String qtyStr = qty.toPlainString();
+        String priceStr = p.toPlainString();
+        OrderPlaceResponse res = this.exchange.limitBuy(symbol, qtyStr, priceStr);
         if (res.checkStatusOK()) {
             String orderId = res.getData();
             long record = System.currentTimeMillis();
@@ -306,17 +327,21 @@ public class HuobiTriangleArbitrage {
                 return marketBuyTradeInfo;
             }
         } else {
+            log.error("Failed to buy. symbol: {}, qty: {} @price: {]", symbol, qtyStr, priceStr);
             return secondRoundBuy(symbol, price, quoteQty);
         }
         throw new OrderPlaceException(res.toString());
     }
 
-    private TradeInfo thirdRoundSell(String symbol, double price, BigDecimal baseQty) throws InterruptedException {
+    private TradeInfo sell(String symbol, double price, BigDecimal baseQty, long timeout)
+            throws InterruptedException {
         Symbol symbolInfo = this.symbolMap.get(symbol);
         int basePrecision = symbolInfo.getAmountPrecision();
         int quotePrecision = symbolInfo.getPricePrecision();
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
-        OrderPlaceResponse res = this.exchange.limitSell(symbol, baseQty.toPlainString(), p.toPlainString());
+        String baseQtyStr = baseQty.toPlainString();
+        String priceStr = p.toPlainString();
+        OrderPlaceResponse res = this.exchange.limitSell(symbol, baseQtyStr, priceStr);
         if (res.checkStatusOK()) {
             String orderId = res.getData();
             long start = System.currentTimeMillis();
@@ -327,7 +352,7 @@ public class HuobiTriangleArbitrage {
                     return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, false);
                 }
                 TimeUnit.SECONDS.sleep(1);
-                if (System.currentTimeMillis() - start > 600000) {//10min
+                if (System.currentTimeMillis() - start > timeout) {//10min
                     break;
                 }
             }
@@ -339,7 +364,7 @@ public class HuobiTriangleArbitrage {
                 baseQty = baseQty.subtract(partialBase);
                 soldQty = getQuoteQtyFromOrder(cancel, quotePrecision, RoundingMode.DOWN);
             }
-            OrderDetail marketSell = this.exchange.marketSell(symbol, baseQty.toPlainString());
+            OrderDetail marketSell = this.exchange.marketSell(symbol, baseQtyStr);
             BigDecimal marketSellQuoteQty = getQuoteQtyFromOrder(marketSell, quotePrecision, RoundingMode.DOWN);
             TradeInfo tradeInfo = new TradeInfo();
             if (soldQty != null) {
@@ -354,7 +379,8 @@ public class HuobiTriangleArbitrage {
             return tradeInfo;
 
         } else {
-            return thirdRoundSell(symbol, price, baseQty);
+            log.error("Failed to sell. symbol: {}, qty: {} @price: {]", symbol, baseQtyStr, priceStr);
+            return sell(symbol, price, baseQty, timeout);
         }
     }
 
