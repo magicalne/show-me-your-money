@@ -18,7 +18,7 @@ public class HuobiProWebSocketClient implements Closeable {
 
     public HuobiProWebSocketClient() {
         Dispatcher d = new Dispatcher();
-        d.setMaxRequestsPerHost(100);
+        d.setMaxRequestsPerHost(200);
         this.client = Util.createOKHTTPClient().dispatcher(d).build();
     }
 
