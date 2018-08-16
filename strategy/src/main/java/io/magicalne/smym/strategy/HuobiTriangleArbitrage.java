@@ -158,13 +158,13 @@ public class HuobiTriangleArbitrage {
             double last = lastDepthAsks.get(priceLevel).get(0) * SELL_SLIPPAGE;
             double profit = getClockwise(source, middle, last);
             if (profit > UPPER_BOUND) {
-                log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
-                        priceLevel+1,
-                        triangular.getSource(), source,
-                        triangular.getMiddle(), middle,
-                        triangular.getLast(), last,
-                        profit);
                 try {
+                    log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                            priceLevel+1,
+                            triangular.getSource(), source,
+                            triangular.getMiddle(), middle,
+                            triangular.getLast(), last,
+                            profit);
                     takeIt(triangular, source, middle, last, this.capital, true);
                 } catch (InterruptedException e) {
                     log.error("InterruptedException.", e);
@@ -197,7 +197,8 @@ public class HuobiTriangleArbitrage {
             try {
                 firstRound = firstRoundBuy(triangular.getSource(), sourcePrice, quoteQty);
             } catch (Exception e) {
-                log.error("Exception happened in first round. Ignore it.", e);
+                log.error("Exception happened in first round. Buy:{}@{} qty:{}. {}",
+                        triangular.getSource(), sourcePrice, quoteQty, e);
             }
             if (firstRound == null) {
                 return;
@@ -453,7 +454,7 @@ public class HuobiTriangleArbitrage {
             strategy.init();
             strategy.run(args[0]);
         } catch (Exception e) {
-            log.info("Exception happened. Stop trading.", e);
+            log.error("Exception happened. Stop trading.", e);
         }
     }
 }

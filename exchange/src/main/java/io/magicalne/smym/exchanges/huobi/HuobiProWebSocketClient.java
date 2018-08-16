@@ -9,6 +9,7 @@ import okhttp3.Request;
 import okhttp3.WebSocket;
 
 import java.io.Closeable;
+import java.util.Set;
 
 public class HuobiProWebSocketClient implements Closeable {
 
@@ -22,11 +23,13 @@ public class HuobiProWebSocketClient implements Closeable {
         this.client = Util.createOKHTTPClient().dispatcher(d).build();
     }
 
-    Closeable createNewWebSocket(String topic, String id, HuobiApiWebSocketListener<?> listener) {
+    Closeable createNewWebSocket(String topic, Set<String> symbols, HuobiApiWebSocketListener<?> listener) {
         Request request = new Request.Builder().url(API_HUOBI_PRO_WS).build();
         final WebSocket webSocket = client.newWebSocket(request, listener);
-        String reqBody = String.format(SUB_REQUEST_TEMPLATE, topic, id);
-        webSocket.send(reqBody);
+        for (String symbol : symbols) {
+            String reqBody = String.format(SUB_REQUEST_TEMPLATE, topic, symbol);
+            webSocket.send(reqBody);
+        }
         return () -> {
             final int code = 1000;
             listener.onClosing(webSocket, code, null);
@@ -35,9 +38,10 @@ public class HuobiProWebSocketClient implements Closeable {
         };
     }
 
-    public Closeable onDepthEvent(String symbol, UniverseApiCallback<DepthResponse> callback) {
-        String topic = String.format("market.%s.depth.%s", symbol, "step0");
-        return this.createNewWebSocket(topic, symbol, new HuobiApiWebSocketListener<>(callback, DepthResponse.class));
+    public Closeable onDepthEvent(Set<String> symbols, UniverseApiCallback<DepthResponse> callback) {
+        String template = "market.%s.depth.step0";
+        HuobiApiWebSocketListener<DepthResponse> cb = new HuobiApiWebSocketListener<>(callback, DepthResponse.class);
+        return this.createNewWebSocket(template, symbols, cb);
     }
 
     @Override
