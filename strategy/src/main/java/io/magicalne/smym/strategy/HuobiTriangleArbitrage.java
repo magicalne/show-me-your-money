@@ -29,7 +29,7 @@ public class HuobiTriangleArbitrage {
     private List<Triangular> htusdtPairList;
     private final Map<String, Symbol> symbolMap = new HashMap<>();
 
-    private final List<String> cannotTradeBaseCurrency = Arrays.asList("vet");
+    private final List<String> cannotTradeBaseCurrency = Collections.singletonList("vet");
     private final String accountId;
     private String capital;
 
@@ -41,12 +41,19 @@ public class HuobiTriangleArbitrage {
 
     public void init() {
         List<Symbol> symbols = this.exchange.getSymbolInfo();
-        for (Symbol s : symbols) {
-            String symbol = s.getSymbol();
+        List<Integer> tobeDeletedIndexList = new ArrayList<>(cannotTradeBaseCurrency.size());
+        for (int i = 0; i < symbols.size(); i ++) {
+            Symbol s = symbols.get(i);
             String baseCurrency = s.getBaseCurrency();
-            if (!cannotTradeBaseCurrency.contains(baseCurrency)) {
+            String symbol = s.getSymbol();
+            if (cannotTradeBaseCurrency.contains(baseCurrency)) {
+                tobeDeletedIndexList.add(i);
+            } else {
                 symbolMap.put(symbol, s);
             }
+        }
+        for (int index : tobeDeletedIndexList) {
+            symbols.remove(index);
         }
 
         Map<String, List<Symbol>> quoteGroup =
