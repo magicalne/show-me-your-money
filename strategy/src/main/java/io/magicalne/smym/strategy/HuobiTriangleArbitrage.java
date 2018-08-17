@@ -43,7 +43,8 @@ public class HuobiTriangleArbitrage {
         List<Symbol> symbols = this.exchange.getSymbolInfo();
         for (Symbol s : symbols) {
             String symbol = s.getSymbol();
-            if (!cannotTradeBaseCurrency.contains(symbol)) {
+            String baseCurrency = s.getBaseCurrency();
+            if (!cannotTradeBaseCurrency.contains(baseCurrency)) {
                 symbolMap.put(symbol, s);
             }
         }
