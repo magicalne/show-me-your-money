@@ -40,6 +40,26 @@ public class HuobiExchange {
         return this.restClient.balance(accountId);
     }
 
+    public List<Double> getBestAsk(String symbol) {
+        Depth depth = this.orderBookMap.get(symbol);
+        List<List<Double>> asks = depth.getAsks();
+        if (asks != null && !asks.isEmpty()) {
+            return asks.get(0);
+        } else {
+            return null;
+        }
+    }
+
+    public List<Double> getBestBid(String symbol) {
+        Depth depth = this.orderBookMap.get(symbol);
+        List<List<Double>> bids = depth.getBids();
+        if (bids != null && !bids.isEmpty()) {
+            return bids.get(0);
+        } else {
+            return null;
+        }
+    }
+
     public Depth getOrderBook(String symbol) {
         return this.orderBookMap.get(symbol);
     }

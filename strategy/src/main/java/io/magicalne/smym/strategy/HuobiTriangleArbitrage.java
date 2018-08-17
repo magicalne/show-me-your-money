@@ -1,13 +1,16 @@
 package io.magicalne.smym.strategy;
 
 import io.magicalne.smym.dto.*;
+import io.magicalne.smym.exception.BuyFailureException;
 import io.magicalne.smym.exception.OrderPlaceException;
+import io.magicalne.smym.exception.SellFailureException;
 import io.magicalne.smym.exchanges.HuobiExchange;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -31,7 +34,8 @@ public class HuobiTriangleArbitrage {
 
     private final List<String> cannotTradeBaseCurrency = Collections.singletonList("vet");
     private final String accountId;
-    private String capital;
+    private String usdt;
+    private String btc;
 
 
     public HuobiTriangleArbitrage(String accountId, String accessKey, String secretKey) {
@@ -62,8 +66,8 @@ public class HuobiTriangleArbitrage {
 
         List<Symbol> usdtGrp = quoteGroup.get("usdt");
         List<Symbol> btcGrp = quoteGroup.get("btc");
-        List<Symbol> ethGrp = quoteGroup.get("eth");
-        List<Symbol> htGrp = quoteGroup.get("ht");
+//        List<Symbol> ethGrp = quoteGroup.get("eth");
+//        List<Symbol> htGrp = quoteGroup.get("ht");
 
         //usdt with btc
         List<Triangular> btcusdtPairList = new LinkedList<>();
@@ -79,20 +83,20 @@ public class HuobiTriangleArbitrage {
                     btcusdtPairList.add(triangular);
                 }
             }
-
-            for (Symbol e : ethGrp) {
-                if (u.getBaseCurrency().equals(e.getBaseCurrency())) {
-                    Triangular triangular = new Triangular(ethusdt, e.getBaseCurrency() + "eth", e.getBaseCurrency() + "usdt");
-                    ethusdtPairList.add(triangular);
-                }
-            }
-
-            for (Symbol h : htGrp) {
-                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
-                    Triangular triangular = new Triangular(htusdt, h.getBaseCurrency() + "ht", h.getBaseCurrency() + "usdt");
-                    htusdtPairList.add(triangular);
-                }
-            }
+//
+//            for (Symbol e : ethGrp) {
+//                if (u.getBaseCurrency().equals(e.getBaseCurrency())) {
+//                    Triangular triangular = new Triangular(ethusdt, e.getBaseCurrency() + "eth", e.getBaseCurrency() + "usdt");
+//                    ethusdtPairList.add(triangular);
+//                }
+//            }
+//
+//            for (Symbol h : htGrp) {
+//                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
+//                    Triangular triangular = new Triangular(htusdt, h.getBaseCurrency() + "ht", h.getBaseCurrency() + "usdt");
+//                    htusdtPairList.add(triangular);
+//                }
+//            }
         }
 
         Set<String> symbolSet = new HashSet<>();
@@ -102,23 +106,35 @@ public class HuobiTriangleArbitrage {
             symbolSet.add(t.getLast());
         });
         this.btcusdtPairList = btcusdtPairList;
-        ethusdtPairList.forEach(t -> {
-            symbolSet.add(t.getSource());
-            symbolSet.add(t.getMiddle());
-            symbolSet.add(t.getLast());
-        });
-        this.ethusdtPairList = ethusdtPairList;
-        htusdtPairList.forEach(t -> {
-            symbolSet.add(t.getSource());
-            symbolSet.add(t.getMiddle());
-            symbolSet.add(t.getLast());
-        });
-        this.htusdtPairList = htusdtPairList;
+//        ethusdtPairList.forEach(t -> {
+//            symbolSet.add(t.getSource());
+//            symbolSet.add(t.getMiddle());
+//            symbolSet.add(t.getLast());
+//        });
+//        this.ethusdtPairList = ethusdtPairList;
+//        htusdtPairList.forEach(t -> {
+//            symbolSet.add(t.getSource());
+//            symbolSet.add(t.getMiddle());
+//            symbolSet.add(t.getLast());
+//        });
+//        this.htusdtPairList = htusdtPairList;
 
         exchange.createOrderBook(symbolSet, 5);
     }
 
-    public String getCapitalFromBalance(String currency) {
+    private void initCapital() {
+        String newUSDT = getCapitalFromBalance("usdt");
+        String newBTC = getCapitalFromBalance("btc");
+        if (this.usdt == null || this.btc == null) {
+            log.info("Capital usdt: {}, btc: {}", this.usdt, this.btc);
+        } else {
+            log.info("Before trade, usdt: {}, btc: {} | now, usdt: {}, btc: {}", this.usdt, this.btc, newUSDT, newBTC);
+        }
+        this.usdt = newUSDT;
+        this.btc = newBTC;
+    }
+
+    private String getCapitalFromBalance(String currency) {
         BalanceResponse balanceRes = this.exchange.getAccount(accountId);
         List<BalanceBean> balances = balanceRes.getData().getList();
         for (BalanceBean b : balances) {
@@ -129,21 +145,17 @@ public class HuobiTriangleArbitrage {
         return null;
     }
 
-    private void run(String capital) {
-        double c = Double.parseDouble(capital);
-
-        String balance = getCapitalFromBalance("usdt");
-        double b = Double.parseDouble(balance);
-        this.capital = c > b ? balance : capital;
-        log.info("Use capital: {}", this.capital);
+    private void run() {
+        initCapital();
         for (;;) {
             findArbitrage(this.btcusdtPairList);
-            findArbitrage(this.ethusdtPairList);
-            findArbitrage(this.htusdtPairList);
+//            findArbitrage(this.ethusdtPairList);
+//            findArbitrage(this.htusdtPairList);
         }
     }
 
     private void findArbitrage(List<Triangular> pairList) {
+        initCapital();
         for (Triangular triangular : pairList) {
             final int priceLevel = 0;
             Depth sourceDepth = this.exchange.getOrderBook(triangular.getSource());
@@ -173,87 +185,102 @@ public class HuobiTriangleArbitrage {
                         triangular.getMiddle(), middle,
                         triangular.getLast(), last,
                         profit);
-                try {
-                    takeIt(triangular, source, middle, last, this.capital, true);
-                } catch (InterruptedException e) {
-                    log.error("InterruptedException.", e);
-                }
+                takeIt(triangular, source, middle, last, this.usdt, this.btc, true);
             }
             //reverse clockwise
-            List<List<Double>> sourceDepthBids = sourceDepth.getBids();
-            List<List<Double>> middleDepthBids = middleDepth.getBids();
-            List<List<Double>> lastDepthAsks = lastDepth.getAsks();
-            source = sourceDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
-            middle = middleDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
-            last = lastDepthAsks.get(priceLevel).get(0) * BUY_SLIPPAGE;
-            profit = getReverse(source, middle, last);
-            if (profit > UPPER_BOUND) {
-                log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
-                        priceLevel+1,
-                        triangular.getLast(), last,
-                        triangular.getMiddle(), middle,
-                        triangular.getSource(), source,
-                        profit);
-                try {
-                    takeIt(triangular, source, middle, last, this.capital, false);
-                } catch (InterruptedException e) {
-                    log.error("InterruptedException.", e);
-                }
-
-            }
+//            List<List<Double>> sourceDepthBids = sourceDepth.getBids();
+//            List<List<Double>> middleDepthBids = middleDepth.getBids();
+//            List<List<Double>> lastDepthAsks = lastDepth.getAsks();
+//            source = sourceDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
+//            middle = middleDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
+//            last = lastDepthAsks.get(priceLevel).get(0) * BUY_SLIPPAGE;
+//            profit = getReverse(source, middle, last);
+//            if (profit > UPPER_BOUND) {
+//                log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+//                        priceLevel+1,
+//                        triangular.getLast(), last,
+//                        triangular.getMiddle(), middle,
+//                        triangular.getSource(), source,
+//                        profit);
+//
+//
+//            }
         }
     }
 
     public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
-                        String quoteQty, boolean clockwise) throws InterruptedException {
+                        String usdt, String btc, boolean clockwise) {
 
         int tenMin = 600000;
-        TradeInfo finalRound;
         if (clockwise) {
-            TradeInfo firstRound = null;
-            try {
-                firstRound = firstRoundBuy(triangular.getSource(), sourcePrice, quoteQty);
-                log.info("Buy first round was done. {}", firstRound);
-            } catch (Exception e) {
-                log.error("Exception happened in first round. Buy:{}@{} qty:{}. {}",
-                        triangular.getSource(), sourcePrice, quoteQty, e);
-            }
-            if (firstRound == null) {
-                return;
-            }
-            TradeInfo secondRound = secondRoundBuy(triangular.getMiddle(), middlePrice, firstRound.getQty());
-            log.info("Buy second round was done. {}", secondRound);
-            finalRound = sell(triangular.getLast(), lastPrice, secondRound.getQty(), tenMin);
-            log.info("Sell final round was done. {}", finalRound);
+            CompletableFuture<TradeInfo> btcusdtBuy = CompletableFuture
+                    .supplyAsync(() -> firstRoundBuy(triangular.getSource(), sourcePrice, usdt, false));
 
-        } else {
-            TradeInfo firstRound = null;
-            try {
-                firstRound = firstRoundBuy(triangular.getLast(), lastPrice, quoteQty);
-                log.info("Buy first round was done. {}", firstRound);
-            } catch (Exception e) {
-                log.error("Exception happened in first round. Buy:{}@{} qty:{}. {}",
-                        triangular.getLast(), lastPrice, quoteQty, e);
+            CompletableFuture<TradeInfo> buyAltcoinAndSell = CompletableFuture
+                    .supplyAsync(() -> {
+                        TradeInfo middleTradeInfo = firstRoundBuy(triangular.getMiddle(), middlePrice, btc, false);
+                        return sell(triangular.getLast(), lastPrice, middleTradeInfo.getQty(), tenMin);
+                    });
+            for (;;) {
+                if (btcusdtBuy.isDone() && buyAltcoinAndSell.isDone()) {
+                    if (btcusdtBuy.isCompletedExceptionally() && buyAltcoinAndSell.isCompletedExceptionally()) {
+                        log.info("Both failed, so give up.");
+                    } else if (btcusdtBuy.isCompletedExceptionally()) {
+                        log.info("Buy btcusdt failed, buy it now.");
+                        firstRoundBuy(triangular.getSource(), sourcePrice, usdt, true);
+                    } else if (buyAltcoinAndSell.isCompletedExceptionally()) {
+                        Triangular pair = findBestPairToUsdt();
+                        log.info("Buy alt coin failed, try again with new pair: {}.", pair);
+                        String source = pair.getSource();
+                        if (source != null) {
+                            Double p = this.exchange.getBestBid(source).get(0);
+                            sell(source, p, new BigDecimal(btc), tenMin);
+                        } else {
+                            String pm = pair.getMiddle();
+                            Double pmPrice = this.exchange.getBestAsk(pm).get(0);
+                            String pl = pair.getLast();
+                            Double plPrice = this.exchange.getBestBid(pl).get(0);
+                            TradeInfo middleTradeInfo = firstRoundBuy(pm, pmPrice, btc, false);
+                            sell(pl, plPrice, middleTradeInfo.getQty(), tenMin);
+                        }
+                    }
+                    initCapital();
+                    return;
+                }
             }
-            if (firstRound == null) {
-                return;
-            }
-            TradeInfo secondRound = sell(triangular.getMiddle(), middlePrice, firstRound.getQty(), 100000);
-            log.info("Sell second round was done. {}", secondRound);
-            finalRound = sell(triangular.getSource(), sourcePrice, secondRound.getQty(), tenMin);
-            log.info("Sell final round was done. {}", finalRound);
         }
-        BigDecimal finalQty = finalRound.getQty();
-        BigDecimal profit = finalQty.divide(new BigDecimal(quoteQty), RoundingMode.DOWN);
-        log.info("Actually, the return of this round: {}", profit.toPlainString());
-
-        String balance = getCapitalFromBalance("usdt");
-        double b = Double.parseDouble(balance);
-        this.capital = Double.parseDouble(this.capital) > b ? balance : capital;
-        log.info("Use capital: {}", this.capital);
     }
 
-    private TradeInfo firstRoundBuy(String symbol, double price, String quoteQty) {
+    private Triangular findBestPairToUsdt() {
+        Triangular bestPair = null;
+        double max = -1;
+        for (Triangular p : this.btcusdtPairList) {
+            String middle = p.getMiddle();
+            String last = p.getLast();
+            List<Double> bestAsk = this.exchange.getBestAsk(middle);
+            List<Double> bestBid = this.exchange.getBestBid(last);
+            if (bestAsk == null || bestBid == null) {
+                continue;
+            }
+            Double middlePrice = bestAsk.get(0);
+            Double lastPrice = bestBid.get(0);
+            double btcusdtPrice = lastPrice / middlePrice;
+            if (btcusdtPrice > max) {
+                max = btcusdtPrice;
+                bestPair = p;
+            }
+        }
+        List<Double> btcusdt = this.exchange.getBestBid("btcusdt");
+        if (btcusdt != null) {
+            Double price = btcusdt.get(0);
+            if (price > max*COMMISSION) {
+                return new Triangular("btcusdt", null, null);
+            }
+        }
+        return new Triangular(null, bestPair.getMiddle(), bestPair.getLast());
+    }
+
+    private TradeInfo firstRoundBuy(String symbol, double price, String quoteQty, boolean force) {
         Symbol symbolInfo = this.symbolMap.get(symbol);
         int basePrecision = symbolInfo.getAmountPrecision();
         int quotePrecision = symbolInfo.getPricePrecision();
@@ -283,9 +310,12 @@ public class HuobiTriangleArbitrage {
             if (FILLED.equals(detail.getState()) || PARTIAL_CANCELED.equals(detail.getState())) {
                 return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, true);
             }
+            if (force) {
+                OrderDetail marketBuy = this.exchange.marketBuy(symbol, qtyStr);
+                return getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision, true);
+            }
         }
-        log.error("Failed to buy. symbol: {}, qty: {} @price: {}, res: {}", symbol, qtyStr, priceStr, res);
-        return null;
+        throw new BuyFailureException(symbol, priceStr, qtyStr, res.toString());
     }
 
     private TradeInfo secondRoundBuy(String symbol, double price, BigDecimal quoteQty) throws InterruptedException {
@@ -360,8 +390,7 @@ public class HuobiTriangleArbitrage {
         throw new OrderPlaceException(res.toString());
     }
 
-    private TradeInfo sell(String symbol, double price, BigDecimal baseQty, long timeout)
-            throws InterruptedException {
+    private TradeInfo sell(String symbol, double price, BigDecimal baseQty, long timeout) {
         Symbol symbolInfo = this.symbolMap.get(symbol);
         int basePrecision = symbolInfo.getAmountPrecision();
         int quotePrecision = symbolInfo.getPricePrecision();
@@ -378,7 +407,11 @@ public class HuobiTriangleArbitrage {
                 if (FILLED.equals(state)) {
                     return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, false);
                 }
-                TimeUnit.SECONDS.sleep(1);
+                try {
+                    TimeUnit.SECONDS.sleep(1);
+                } catch (InterruptedException e) {
+                    throw new SellFailureException(e);
+                }
                 if (System.currentTimeMillis() - start > timeout) {
                     break;
                 }
@@ -405,11 +438,8 @@ public class HuobiTriangleArbitrage {
                 tradeInfo.setQty(marketSellQuoteQty);
             }
             return tradeInfo;
-
-        } else {
-            log.error("Failed to sell. symbol: {}, qty: {} @price: {}, res: {}", symbol, baseQtyStr, priceStr, res);
         }
-        return sell(symbol, price, baseQty, timeout);
+        throw new SellFailureException(symbol, priceStr, baseQtyStr, res.toString());
     }
 
     private TradeInfo getTradeInfoFromOrder(OrderDetail detail, int basePrecision, int quotePrecision, boolean isBuy) {
@@ -516,7 +546,7 @@ public class HuobiTriangleArbitrage {
             String accessKeySecret = System.getenv("HUOBI_ACCESS_KEY_SECRET");
             HuobiTriangleArbitrage strategy = new HuobiTriangleArbitrage("2672827", accessKeyId, accessKeySecret);
             strategy.init();
-            strategy.run(args[0]);
+            strategy.run();
         } catch (Exception e) {
             log.error("Exception happened. Stop trading.", e);
         }
