@@ -6,6 +6,8 @@ import io.magicalne.smym.exchanges.HuobiExchange;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,6 +32,14 @@ public class TriangleArbitrageTest {
                 break;
             }
         }
+    }
+
+    @Test
+    public void test2() {
+        BigDecimal quoteQty = new BigDecimal("0.0099").setScale(4, RoundingMode.DOWN);
+        BigDecimal p = new BigDecimal("0.000060663933000000004").setScale(8, RoundingMode.UP);
+        BigDecimal qty = quoteQty.divide(p, RoundingMode.DOWN).setScale(4, RoundingMode.DOWN);
+        System.out.println(qty.toPlainString());
     }
 
     @Test

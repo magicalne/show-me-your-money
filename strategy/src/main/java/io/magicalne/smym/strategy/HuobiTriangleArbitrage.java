@@ -177,9 +177,9 @@ public class HuobiTriangleArbitrage {
             if (profit > UPPER_BOUND) {
                 log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
                         priceLevel+1,
-                        triangular.getSource(), source,
-                        triangular.getMiddle(), middle,
                         triangular.getLast(), last,
+                        triangular.getMiddle(), middle,
+                        triangular.getSource(), source,
                         profit);
                 try {
                     takeIt(triangular, source, middle, last, this.capital, false);
@@ -246,7 +246,7 @@ public class HuobiTriangleArbitrage {
         int quotePrecision = symbolInfo.getPricePrecision();
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
         BigDecimal q = new BigDecimal(quoteQty).setScale(quotePrecision, RoundingMode.DOWN);
-        BigDecimal qty = q.divide(p, quotePrecision).setScale(basePrecision, RoundingMode.DOWN);
+        BigDecimal qty = q.divide(p, RoundingMode.DOWN).setScale(basePrecision, RoundingMode.DOWN);
 
         String qtyStr = qty.toPlainString();
         String priceStr = p.toPlainString();
@@ -279,7 +279,7 @@ public class HuobiTriangleArbitrage {
         int basePrecision = symbolInfo.getAmountPrecision();
         int quotePrecision = symbolInfo.getPricePrecision();
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
-        BigDecimal qty = quoteQty.divide(p, quotePrecision).setScale(basePrecision, RoundingMode.DOWN);
+        BigDecimal qty = quoteQty.divide(p, RoundingMode.DOWN).setScale(basePrecision, RoundingMode.DOWN);
 
         String qtyStr = qty.toPlainString();
         String priceStr = p.toPlainString();
@@ -328,7 +328,7 @@ public class HuobiTriangleArbitrage {
                         .setScale(basePrecision, RoundingMode.DOWN);
                 BigDecimal totalBaseQty = filledBaseQty.add(marketBuyBaseQty);
                 marketBuyTradeInfo.setQty(totalBaseQty);
-                BigDecimal finalPrice = quoteQty.divide(totalBaseQty, quotePrecision)
+                BigDecimal finalPrice = quoteQty.divide(totalBaseQty, RoundingMode.DOWN)
                         .setScale(quotePrecision, RoundingMode.UP);
                 marketBuyTradeInfo.setPrice(finalPrice);
                 return marketBuyTradeInfo;
@@ -376,7 +376,7 @@ public class HuobiTriangleArbitrage {
             TradeInfo tradeInfo = new TradeInfo();
             if (soldQty != null) {
                 BigDecimal totalQuoteQty = marketSellQuoteQty.add(soldQty);
-                BigDecimal finalPrice = totalQuoteQty.divide(baseQty, quotePrecision)
+                BigDecimal finalPrice = totalQuoteQty.divide(baseQty, RoundingMode.DOWN)
                         .setScale(quotePrecision, RoundingMode.DOWN);
                 tradeInfo.setPrice(finalPrice);
                 tradeInfo.setQty(totalQuoteQty);
