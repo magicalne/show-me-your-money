@@ -241,6 +241,7 @@ public class HuobiTriangleArbitrage {
     }
 
     private TradeInfo firstRoundBuy(String symbol, double price, String quoteQty) {
+        log.info("quote qty: {}", quoteQty);
         Symbol symbolInfo = this.symbolMap.get(symbol);
         int basePrecision = symbolInfo.getAmountPrecision();
         int quotePrecision = symbolInfo.getPricePrecision();
