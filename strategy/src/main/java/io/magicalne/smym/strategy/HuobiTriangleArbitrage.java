@@ -238,7 +238,7 @@ public class HuobiTriangleArbitrage {
             if (firstRound == null) {
                 return;
             }
-            TradeInfo secondRound = sell(triangular.getMiddle(), middlePrice, firstRound.getQty(), 10000);
+            TradeInfo secondRound = sell(triangular.getMiddle(), middlePrice, firstRound.getQty(), 100000);
             log.info("Sell second round was done. {}", secondRound);
             finalRound = sell(triangular.getSource(), sourcePrice, secondRound.getQty(), tenMin);
             log.info("Sell final round was done. {}", finalRound);
@@ -312,13 +312,13 @@ public class HuobiTriangleArbitrage {
                 if (FILLED.equals(state)) {
                     break;
                 }
-                if (System.currentTimeMillis() - record > 5000) {
+                if (System.currentTimeMillis() - record > 10000) {
                     double newBid = getTopBidPriceFromOrderBook(symbol);
                     if (newBid > 0 && newBid*BUY_SLIPPAGE > price){
                         detail = this.exchange.cancel(orderId);
                         break;
                     } else { //price has advantage, so wait more time
-                        if (System.currentTimeMillis() - record > 10) {
+                        if (System.currentTimeMillis() - record > 100) {
                             detail = this.exchange.cancel(orderId);
                             break;
                         }
