@@ -316,28 +316,26 @@ public class HuobiTriangleArbitrage {
                 OrderDetail marketBuy = this.exchange.marketBuy(symbol, quoteQty.toPlainString());
                 return getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision, true);
             } else if (PARTIAL_CANCELED.equals(state)) {
-                BigDecimal filledPart = new BigDecimal(detail.getFieldAmount())
-                        .setScale(quotePrecision, RoundingMode.DOWN);
+                TradeInfo filledTradeInfo = getTradeInfoFromOrder(detail, basePrecision, quotePrecision, true);
+                BigDecimal filledBaseQty = filledTradeInfo.getQty();
                 BigDecimal partQuoteQty = new BigDecimal(detail.getFieldCashAmount())
-                        .setScale(quotePrecision, RoundingMode.DOWN);
-                BigDecimal fees = new BigDecimal(detail.getFieldFees())
-                        .setScale(quotePrecision, RoundingMode.DOWN);
-                BigDecimal leftQuoteQty = quoteQty.subtract(partQuoteQty).subtract(fees);
+                        .setScale(quotePrecision, RoundingMode.UP);
+                BigDecimal leftQuoteQty = quoteQty.subtract(partQuoteQty);
                 //market buy
                 OrderDetail marketBuy = this.exchange.marketBuy(symbol, leftQuoteQty.toPlainString());
                 TradeInfo marketBuyTradeInfo = getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision, true);
                 BigDecimal marketBuyBaseQty = new BigDecimal(marketBuy.getFieldAmount())
                         .setScale(basePrecision, RoundingMode.DOWN);
-                BigDecimal totalBaseQty = filledPart.add(marketBuyBaseQty);
+                BigDecimal totalBaseQty = filledBaseQty.add(marketBuyBaseQty);
                 marketBuyTradeInfo.setQty(totalBaseQty);
                 BigDecimal finalPrice = quoteQty.divide(totalBaseQty, quotePrecision)
-                        .setScale(quotePrecision, RoundingMode.DOWN);
+                        .setScale(quotePrecision, RoundingMode.UP);
                 marketBuyTradeInfo.setPrice(finalPrice);
                 return marketBuyTradeInfo;
             }
         } else {
             log.error("Failed to buy. symbol: {}, qty: {} @price: {}, res: {}", symbol, qtyStr, priceStr, res);
-            return secondRoundBuy(symbol, price, quoteQty);
+//            return secondRoundBuy(symbol, price, quoteQty);
         }
         throw new OrderPlaceException(res.toString());
     }
@@ -390,8 +388,8 @@ public class HuobiTriangleArbitrage {
 
         } else {
             log.error("Failed to sell. symbol: {}, qty: {} @price: {}, res: {}", symbol, baseQtyStr, priceStr, res);
-            return sell(symbol, price, baseQty, timeout);
         }
+        throw new OrderPlaceException(res.toString());
     }
 
     private TradeInfo getTradeInfoFromOrder(OrderDetail detail, int basePrecision, int quotePrecision, boolean isBuy) {
@@ -399,13 +397,18 @@ public class HuobiTriangleArbitrage {
                 .setScale(quotePrecision, RoundingMode.UP);
         TradeInfo tradeInfo = new TradeInfo();
         tradeInfo.setPrice(quotePrice);
+        BigDecimal totalQty;
         if (isBuy) {
             BigDecimal baseQty = new BigDecimal(detail.getFieldAmount()).setScale(basePrecision, RoundingMode.DOWN);
-            tradeInfo.setQty(baseQty);
+            BigDecimal fee = new BigDecimal(detail.getFieldFees()).setScale(basePrecision, RoundingMode.UP);
+            totalQty = baseQty.subtract(fee);
         } else {
             BigDecimal quoteQty = getQuoteQtyFromOrder(detail, quotePrecision, RoundingMode.DOWN);
-            tradeInfo.setQty(quoteQty);
+            BigDecimal fee = new BigDecimal(detail.getFieldFees()).setScale(quotePrecision, RoundingMode.UP);
+            totalQty = quoteQty.subtract(fee);
         }
+        tradeInfo.setQty(totalQty);
+
         return tradeInfo;
     }
 
