@@ -389,7 +389,7 @@ public class HuobiTriangleArbitrage {
         } else {
             log.error("Failed to sell. symbol: {}, qty: {} @price: {}, res: {}", symbol, baseQtyStr, priceStr, res);
         }
-        throw new OrderPlaceException(res.toString());
+        return sell(symbol, price, baseQty, timeout);
     }
 
     private TradeInfo getTradeInfoFromOrder(OrderDetail detail, int basePrecision, int quotePrecision, boolean isBuy) {
