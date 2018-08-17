@@ -52,7 +52,8 @@ public class HuobiTriangleArbitrage {
                 symbolMap.put(symbol, s);
             }
         }
-        for (int index : tobeDeletedIndexList) {
+        for (int i = tobeDeletedIndexList.size()-1; i >= 0; i --) {
+            int index = tobeDeletedIndexList.get(i);
             symbols.remove(index);
         }
 
