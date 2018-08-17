@@ -23,9 +23,9 @@ public class BinanceTriangleArbitrage {
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.01;
-    private static final double BUY_SLIPPAGE = 1.0001;
-    private static final double SELL_SLIPPAGE = 0.9999;
+    private static final double UPPER_BOUND = 1.005;
+    private static final double BUY_SLIPPAGE = 1.000;
+    private static final double SELL_SLIPPAGE = 1;
 
     private final BinanceExchange exchange;
     private List<Triangular> btcusdtPairList;
@@ -98,15 +98,15 @@ public class BinanceTriangleArbitrage {
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
 
-            List<OrderBookEntry> sourceOBBids = sourceOB.getBids();
-            List<OrderBookEntry> middleOBBids = middleOB.getBids();
-            List<OrderBookEntry> lastOBAsks = lastOB.getAsks();
-            if (sourceOBBids != null && sourceOBBids.size() > priceLevel+1 &&
-                    middleOBBids != null && middleOBBids.size() > priceLevel+1 &&
-                    lastOBAsks != null && lastOBAsks.size() > priceLevel+1) {
-                double source = Double.parseDouble(sourceOBBids.get(priceLevel).getPrice());
-                double middle = Double.parseDouble(middleOBBids.get(priceLevel).getPrice());
-                double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
+            List<OrderBookEntry> sourceOBAsks = sourceOB.getAsks();
+            List<OrderBookEntry> middleOBAsks = middleOB.getAsks();
+            List<OrderBookEntry> lastOBBids = lastOB.getBids();
+            if (sourceOBAsks != null && sourceOBAsks.size() > priceLevel+1 &&
+                    middleOBAsks != null && middleOBAsks.size() > priceLevel+1 &&
+                    lastOBBids != null && lastOBBids.size() > priceLevel+1) {
+                double source = Double.parseDouble(sourceOBAsks.get(priceLevel).getPrice());
+                double middle = Double.parseDouble(middleOBAsks.get(priceLevel).getPrice());
+                double last = Double.parseDouble(lastOBBids.get(priceLevel).getPrice());
                 double profit = getClockwise(source*BUY_SLIPPAGE, middle*BUY_SLIPPAGE, last*SELL_SLIPPAGE);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
@@ -118,15 +118,15 @@ public class BinanceTriangleArbitrage {
                 }
             }
 
-            List<OrderBookEntry> sourceOBAsks = sourceOB.getAsks();
-            List<OrderBookEntry> middleOBAsks = middleOB.getAsks();
-            List<OrderBookEntry> lastOBBids = lastOB.getBids();
-            if (sourceOBAsks != null && sourceOBAsks.size() > priceLevel+1 &&
-                    middleOBAsks != null && middleOBAsks.size() > priceLevel+1 &&
-                    lastOBBids != null && lastOBBids.size() > priceLevel+1) {
-                double source = Double.parseDouble(sourceOBAsks.get(priceLevel).getPrice());
-                double middle = Double.parseDouble(middleOBAsks.get(priceLevel).getPrice());
-                double last = Double.parseDouble(lastOBBids.get(priceLevel).getPrice());
+            List<OrderBookEntry> sourceOBBids = sourceOB.getBids();
+            List<OrderBookEntry> middleOBBids = middleOB.getBids();
+            List<OrderBookEntry> lastOBAsks = lastOB.getAsks();
+            if (sourceOBBids != null && sourceOBBids.size() > priceLevel+1 &&
+                    middleOBBids != null && middleOBBids.size() > priceLevel+1 &&
+                    lastOBAsks != null && lastOBAsks.size() > priceLevel+1) {
+                double source = Double.parseDouble(sourceOBBids.get(priceLevel).getPrice());
+                double middle = Double.parseDouble(middleOBBids.get(priceLevel).getPrice());
+                double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
                 double profit = getClockwise(source*SELL_SLIPPAGE, middle*SELL_SLIPPAGE, last*BUY_SLIPPAGE);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",

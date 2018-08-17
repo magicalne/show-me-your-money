@@ -27,7 +27,7 @@ public class TriangleArbitrageTest {
     public void test1() {
         List<Symbol> symbolInfo = huobiExchange.getSymbolInfo();
         for (Symbol symbol : symbolInfo) {
-            if ("actusdt".equals(symbol.getSymbol())) {
+            if ("ethusdt".equals(symbol.getSymbol())) {
                 System.out.println(symbol);
                 break;
             }
@@ -36,10 +36,16 @@ public class TriangleArbitrageTest {
 
     @Test
     public void test2() {
-        BigDecimal quoteQty = new BigDecimal("0.0099").setScale(4, RoundingMode.DOWN);
-        BigDecimal p = new BigDecimal("0.000060663933000000004").setScale(8, RoundingMode.UP);
-        BigDecimal qty = quoteQty.divide(p, RoundingMode.DOWN).setScale(4, RoundingMode.DOWN);
-        System.out.println(qty.toPlainString());
+        int basePrecision = 4;
+        int quotePrecision = 2;
+        BigDecimal q = new BigDecimal("2").setScale(basePrecision, RoundingMode.DOWN);
+        BigDecimal p = new BigDecimal(2342.45).setScale(quotePrecision, RoundingMode.HALF_EVEN);
+        BigDecimal qty = q.divide(p, RoundingMode.HALF_EVEN).setScale(basePrecision, RoundingMode.DOWN);
+
+        String qtyStr = qty.toPlainString();
+        String priceStr = p.toPlainString();
+        System.out.println(qtyStr);
+        System.out.println(priceStr);
     }
 
     @Test

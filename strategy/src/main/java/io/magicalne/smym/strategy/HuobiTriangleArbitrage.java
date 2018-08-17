@@ -19,9 +19,9 @@ public class HuobiTriangleArbitrage {
     private static final String CANCELED = "canceled";
     private static final String PARTIAL_FILLED = "partial-filled";
     private static final String FILLED = "filled";
-    private static final double UPPER_BOUND = 1.005;
-    private static final double BUY_SLIPPAGE = 0.9999;
-    private static final double SELL_SLIPPAGE = 1.0001;
+    private static final double UPPER_BOUND = 1.001;
+    private static final double BUY_SLIPPAGE = 1;
+    private static final double SELL_SLIPPAGE = 1;
 
     private final HuobiExchange exchange;
     private List<Triangular> btcusdtPairList;
