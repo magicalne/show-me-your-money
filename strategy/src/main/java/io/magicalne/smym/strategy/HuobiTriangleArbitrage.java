@@ -155,7 +155,6 @@ public class HuobiTriangleArbitrage {
     }
 
     private void findArbitrage(List<Triangular> pairList) {
-        initCapital();
         for (Triangular triangular : pairList) {
             final int priceLevel = 0;
             Depth sourceDepth = this.exchange.getOrderBook(triangular.getSource());
