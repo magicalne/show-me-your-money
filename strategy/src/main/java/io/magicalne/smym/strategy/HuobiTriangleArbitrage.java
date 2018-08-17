@@ -29,6 +29,7 @@ public class HuobiTriangleArbitrage {
     private List<Triangular> htusdtPairList;
     private final Map<String, Symbol> symbolMap = new HashMap<>();
 
+    private final List<String> cannotTradeBaseCurrency = Arrays.asList("vet");
     private final String accountId;
     private String capital;
 
@@ -41,7 +42,10 @@ public class HuobiTriangleArbitrage {
     public void init() {
         List<Symbol> symbols = this.exchange.getSymbolInfo();
         for (Symbol s : symbols) {
-            symbolMap.put(s.getSymbol(), s);
+            String symbol = s.getSymbol();
+            if (!cannotTradeBaseCurrency.contains(symbol)) {
+                symbolMap.put(symbol, s);
+            }
         }
 
         Map<String, List<Symbol>> quoteGroup =
