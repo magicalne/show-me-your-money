@@ -129,7 +129,10 @@ public class HuobiExchange {
         if (status) {
             for (;;) {
                 OrderDetail detail = queryOrder(orderId);
-                if (CANCELED.equals(detail.getState()) || PARTIAL_CANCELED.equals(detail.getState())) {
+                String state = detail.getState();
+                if (CANCELED.equals(state) ||
+                        PARTIAL_CANCELED.equals(state) ||
+                        FILLED.equals(state)) {
                     return detail;
                 }
             }

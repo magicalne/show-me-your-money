@@ -346,7 +346,7 @@ public class HuobiTriangleArbitrage {
         int basePrecision = symbolInfo.getAmountPrecision();
         int quotePrecision = symbolInfo.getPricePrecision();
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
-        String baseQtyStr = baseQty.toPlainString();
+        String baseQtyStr = baseQty.setScale(basePrecision, RoundingMode.DOWN).toPlainString();
         String priceStr = p.toPlainString();
         OrderPlaceResponse res = this.exchange.limitSell(symbol, baseQtyStr, priceStr);
         if (res.checkStatusOK()) {
@@ -359,7 +359,7 @@ public class HuobiTriangleArbitrage {
                     return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, false);
                 }
                 TimeUnit.SECONDS.sleep(1);
-                if (System.currentTimeMillis() - start > timeout) {//10min
+                if (System.currentTimeMillis() - start > timeout) {
                     break;
                 }
             }
