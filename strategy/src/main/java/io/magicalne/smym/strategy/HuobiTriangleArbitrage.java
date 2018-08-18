@@ -305,6 +305,11 @@ public class HuobiTriangleArbitrage {
                     detail = this.exchange.cancel(orderId);
                     break;
                 }
+                try {
+                    TimeUnit.MILLISECONDS.sleep(100);
+                } catch (InterruptedException e) {
+                    log.error("Interrupted exception.", e);
+                }
             }
             if (FILLED.equals(detail.getState()) || PARTIAL_CANCELED.equals(detail.getState())) {
                 return getTradeInfoFromOrder(detail, basePrecision, quotePrecision, true);

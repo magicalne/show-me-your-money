@@ -27,7 +27,7 @@ public class TriangleArbitrageTest {
     public void test1() {
         List<Symbol> symbolInfo = huobiExchange.getSymbolInfo();
         for (Symbol symbol : symbolInfo) {
-            if ("ethusdt".equals(symbol.getSymbol())) {
+            if ("ruffbtc".equals(symbol.getSymbol())) {
                 System.out.println(symbol);
                 break;
             }

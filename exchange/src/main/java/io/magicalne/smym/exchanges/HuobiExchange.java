@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class HuobiExchange {
@@ -154,6 +155,11 @@ public class HuobiExchange {
                         PARTIAL_CANCELED.equals(state) ||
                         FILLED.equals(state)) {
                     return detail;
+                }
+                try {
+                    TimeUnit.MILLISECONDS.sleep(100);
+                } catch (InterruptedException e) {
+                    log.error("Interrupted exception.", e);
                 }
             }
         } else {
