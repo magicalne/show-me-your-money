@@ -22,7 +22,7 @@ public class HuobiTriangleArbitrage {
     private static final String CANCELED = "canceled";
     private static final String PARTIAL_FILLED = "partial-filled";
     private static final String FILLED = "filled";
-    private static final double UPPER_BOUND = 1.001;
+    private static final double UPPER_BOUND = 1.005;
     private static final double BUY_SLIPPAGE = 1;
     private static final double SELL_SLIPPAGE = 1;
 
@@ -167,7 +167,7 @@ public class HuobiTriangleArbitrage {
             throw new IllegalArgumentException("Wrong argument: baseType: " + baseType);
         }
         for (Triangular triangular : pairList) {
-            final int priceLevel = 1;
+            final int priceLevel = 0;
             Depth sourceDepth = this.exchange.getOrderBook(triangular.getSource());
             Depth middleDepth = this.exchange.getOrderBook(triangular.getMiddle());
             Depth lastDepth = this.exchange.getOrderBook(triangular.getLast());
