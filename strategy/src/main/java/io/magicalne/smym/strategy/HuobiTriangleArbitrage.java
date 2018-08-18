@@ -256,7 +256,7 @@ public class HuobiTriangleArbitrage {
                         Double plPrice = this.exchange.getBestAsk(pl).get(0);
                         String pm = pair.getMiddle();
                         Double pmPrice = this.exchange.getBestBid(pm).get(0);
-                        TradeInfo tradeInfo = firstRoundBuy(pl, plPrice, usdt, false);
+                        TradeInfo tradeInfo = firstRoundBuy(pl, plPrice, usdt, true);
                         sell(pm, pmPrice, tradeInfo.getQty(), tenMin);
                     }
                 } else if (getSpreed.isCompletedExceptionally()) {
@@ -297,7 +297,7 @@ public class HuobiTriangleArbitrage {
                         Double pmPrice = this.exchange.getBestAsk(pm).get(0);
                         String pl = pair.getLast();
                         Double plPrice = this.exchange.getBestBid(pl).get(0);
-                        TradeInfo middleTradeInfo = firstRoundBuy(pm, pmPrice, base, false);
+                        TradeInfo middleTradeInfo = firstRoundBuy(pm, pmPrice, base, true);
                         sell(pl, plPrice, middleTradeInfo.getQty(), timeout);
                     }
                 }
