@@ -167,7 +167,7 @@ public class HuobiTriangleArbitrage {
             throw new IllegalArgumentException("Wrong argument: baseType: " + baseType);
         }
         for (Triangular triangular : pairList) {
-            final int priceLevel = 0;
+            final int priceLevel = 1;
             Depth sourceDepth = this.exchange.getOrderBook(triangular.getSource());
             Depth middleDepth = this.exchange.getOrderBook(triangular.getMiddle());
             Depth lastDepth = this.exchange.getOrderBook(triangular.getLast());
@@ -410,7 +410,7 @@ public class HuobiTriangleArbitrage {
                     break;
                 }
                 try {
-                    TimeUnit.MILLISECONDS.sleep(100);
+                    TimeUnit.MILLISECONDS.sleep(150);
                 } catch (InterruptedException e) {
                     log.error("Interrupted exception.", e);
                 }

@@ -157,7 +157,7 @@ public class HuobiExchange {
                     return detail;
                 }
                 try {
-                    TimeUnit.MILLISECONDS.sleep(100);
+                    TimeUnit.MILLISECONDS.sleep(150);
                 } catch (InterruptedException e) {
                     log.error("Interrupted exception.", e);
                 }
