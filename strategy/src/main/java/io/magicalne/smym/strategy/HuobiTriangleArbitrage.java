@@ -36,6 +36,7 @@ public class HuobiTriangleArbitrage {
     private final String accountId;
     private String usdt;
     private String btc;
+    private String eth;
 
 
     public HuobiTriangleArbitrage(String accountId, String accessKey, String secretKey) {
@@ -66,7 +67,7 @@ public class HuobiTriangleArbitrage {
 
         List<Symbol> usdtGrp = quoteGroup.get("usdt");
         List<Symbol> btcGrp = quoteGroup.get("btc");
-//        List<Symbol> ethGrp = quoteGroup.get("eth");
+        List<Symbol> ethGrp = quoteGroup.get("eth");
 //        List<Symbol> htGrp = quoteGroup.get("ht");
 
         //usdt with btc
@@ -83,13 +84,13 @@ public class HuobiTriangleArbitrage {
                     btcusdtPairList.add(triangular);
                 }
             }
-//
-//            for (Symbol e : ethGrp) {
-//                if (u.getBaseCurrency().equals(e.getBaseCurrency())) {
-//                    Triangular triangular = new Triangular(ethusdt, e.getBaseCurrency() + "eth", e.getBaseCurrency() + "usdt");
-//                    ethusdtPairList.add(triangular);
-//                }
-//            }
+
+            for (Symbol e : ethGrp) {
+                if (u.getBaseCurrency().equals(e.getBaseCurrency())) {
+                    Triangular triangular = new Triangular(ethusdt, e.getBaseCurrency() + "eth", e.getBaseCurrency() + "usdt");
+                    ethusdtPairList.add(triangular);
+                }
+            }
 //
 //            for (Symbol h : htGrp) {
 //                if (u.getBaseCurrency().equals(h.getBaseCurrency())) {
@@ -106,12 +107,12 @@ public class HuobiTriangleArbitrage {
             symbolSet.add(t.getLast());
         });
         this.btcusdtPairList = btcusdtPairList;
-//        ethusdtPairList.forEach(t -> {
-//            symbolSet.add(t.getSource());
-//            symbolSet.add(t.getMiddle());
-//            symbolSet.add(t.getLast());
-//        });
-//        this.ethusdtPairList = ethusdtPairList;
+        ethusdtPairList.forEach(t -> {
+            symbolSet.add(t.getSource());
+            symbolSet.add(t.getMiddle());
+            symbolSet.add(t.getLast());
+        });
+        this.ethusdtPairList = ethusdtPairList;
 //        htusdtPairList.forEach(t -> {
 //            symbolSet.add(t.getSource());
 //            symbolSet.add(t.getMiddle());
@@ -125,13 +126,16 @@ public class HuobiTriangleArbitrage {
     private void initCapital() {
         String newUSDT = getCapitalFromBalance("usdt");
         String newBTC = getCapitalFromBalance("btc");
-        if (this.usdt == null || this.btc == null) {
-            log.info("Capital usdt: {}, btc: {}", this.usdt, this.btc);
+        String newETH = getCapitalFromBalance("eth");
+        if (this.usdt == null || this.btc == null || this.eth == null) {
+            log.info("Capital usdt: {}, btc: {}, eth: {}", newUSDT, newBTC, newETH);
         } else {
-            log.info("Before trade, usdt: {}, btc: {} | now, usdt: {}, btc: {}", this.usdt, this.btc, newUSDT, newBTC);
+            log.info("Before trade, usdt: {}, btc: {}, eth: {} | now, usdt: {}, btc: {}, eth: {}",
+                    this.usdt, this.btc, this.eth, newUSDT, newBTC, newETH);
         }
         this.usdt = newUSDT;
         this.btc = newBTC;
+        this.eth = newETH;
     }
 
     private String getCapitalFromBalance(String currency) {
@@ -148,13 +152,20 @@ public class HuobiTriangleArbitrage {
     private void run() {
         initCapital();
         for (;;) {
-            findArbitrage(this.btcusdtPairList);
-//            findArbitrage(this.ethusdtPairList);
-//            findArbitrage(this.htusdtPairList);
+            findArbitrage(this.btcusdtPairList, "btc");
+            findArbitrage(this.ethusdtPairList, "eth");
         }
     }
 
-    private void findArbitrage(List<Triangular> pairList) {
+    private void findArbitrage(List<Triangular> pairList, String baseType) {
+        String baseQty;
+        if ("btc".equals(baseType)) {
+            baseQty = this.btc;
+        } else if ("eth".equals(baseType)) {
+            baseQty = this.eth;
+        } else {
+            throw new IllegalArgumentException("Wrong argument: baseType: " + baseType);
+        }
         for (Triangular triangular : pairList) {
             final int priceLevel = 0;
             Depth sourceDepth = this.exchange.getOrderBook(triangular.getSource());
@@ -184,76 +195,130 @@ public class HuobiTriangleArbitrage {
                         triangular.getMiddle(), middle,
                         triangular.getLast(), last,
                         profit);
-                takeIt(triangular, source, middle, last, this.usdt, this.btc, true);
+                takeIt(triangular, source, middle, last, this.usdt, baseQty, baseType,true);
             }
             //reverse clockwise
-//            List<List<Double>> sourceDepthBids = sourceDepth.getBids();
-//            List<List<Double>> middleDepthBids = middleDepth.getBids();
-//            List<List<Double>> lastDepthAsks = lastDepth.getAsks();
-//            source = sourceDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
-//            middle = middleDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
-//            last = lastDepthAsks.get(priceLevel).get(0) * BUY_SLIPPAGE;
-//            profit = getReverse(source, middle, last);
-//            if (profit > UPPER_BOUND) {
-//                log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
-//                        priceLevel+1,
-//                        triangular.getLast(), last,
-//                        triangular.getMiddle(), middle,
-//                        triangular.getSource(), source,
-//                        profit);
-//
-//
-//            }
+            List<List<Double>> sourceDepthBids = sourceDepth.getBids();
+            List<List<Double>> middleDepthBids = middleDepth.getBids();
+            List<List<Double>> lastDepthAsks = lastDepth.getAsks();
+            source = sourceDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
+            middle = middleDepthBids.get(priceLevel).get(0) * SELL_SLIPPAGE;
+            last = lastDepthAsks.get(priceLevel).get(0) * BUY_SLIPPAGE;
+            profit = getReverse(source, middle, last);
+            if (profit > UPPER_BOUND) {
+                log.info("Use {}st price in order book. Reverse Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
+                        priceLevel+1,
+                        triangular.getLast(), last,
+                        triangular.getMiddle(), middle,
+                        triangular.getSource(), source,
+                        profit);
+                takeIt(triangular, source, middle, last, this.usdt, baseQty, baseType,false);
+            }
         }
     }
 
     public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
-                        String usdt, String btc, boolean clockwise) {
+                        String usdt, String base, String baseType, boolean clockwise) {
 
         int tenMin = 600000;
         if (clockwise) {
-            CompletableFuture<TradeInfo> btcusdtBuy = CompletableFuture
-                    .supplyAsync(() -> firstRoundBuy(triangular.getSource(), sourcePrice, usdt, false));
+            clockwiseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, base, baseType, tenMin);
+        } else {
+            reverseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, base, baseType, tenMin);
+        }
+    }
 
-            CompletableFuture<TradeInfo> buyAltcoinAndSell = CompletableFuture
-                    .supplyAsync(() -> {
-                        TradeInfo middleTradeInfo = firstRoundBuy(triangular.getMiddle(), middlePrice, btc, false);
-                        return sell(triangular.getLast(), lastPrice, middleTradeInfo.getQty(), tenMin);
-                    });
-            for (;;) {
-                if (btcusdtBuy.isDone() && buyAltcoinAndSell.isDone()) {
-                    if (btcusdtBuy.isCompletedExceptionally() && buyAltcoinAndSell.isCompletedExceptionally()) {
-                        log.info("Both failed, so give up.");
-                    } else if (btcusdtBuy.isCompletedExceptionally()) {
-                        log.info("Buy btcusdt failed, buy it now.");
-                        firstRoundBuy(triangular.getSource(), sourcePrice, usdt, true);
-                    } else if (buyAltcoinAndSell.isCompletedExceptionally()) {
-                        Triangular pair = findBestPairToUsdt();
-                        log.info("Buy alt coin failed, try again with new pair: {}.", pair);
-                        String source = pair.getSource();
-                        if (source != null) {
-                            Double p = this.exchange.getBestBid(source).get(0);
-                            sell(source, p, new BigDecimal(btc), tenMin);
-                        } else {
-                            String pm = pair.getMiddle();
-                            Double pmPrice = this.exchange.getBestAsk(pm).get(0);
-                            String pl = pair.getLast();
-                            Double plPrice = this.exchange.getBestBid(pl).get(0);
-                            TradeInfo middleTradeInfo = firstRoundBuy(pm, pmPrice, btc, false);
-                            sell(pl, plPrice, middleTradeInfo.getQty(), tenMin);
-                        }
-                    }
-                    initCapital();
+    private void reverseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                                  String usdt, String base, String baseType, int tenMin) {
+        CompletableFuture<TradeInfo> buyBase = CompletableFuture
+                .supplyAsync(() -> {
+                    TradeInfo tradeInfo = firstRoundBuy(triangular.getLast(), lastPrice, usdt, false);
+                    return sell(triangular.getMiddle(), middlePrice, tradeInfo.getQty(), tenMin);
+                });
+
+        CompletableFuture<TradeInfo> getSpreed = CompletableFuture
+                .supplyAsync(() -> sell(triangular.getSource(), sourcePrice, new BigDecimal(base), tenMin));
+        for (; ; ) {
+            if (buyBase.isDone() && getSpreed.isDone()) {
+                if (buyBase.isCompletedExceptionally() && getSpreed.isCompletedExceptionally()) {
+                    log.info("Both failed, so give up.");
                     return;
+                } else if (buyBase.isCompletedExceptionally()) {
+                    log.info("Buy base failed, buy it now.");
+
+                    Triangular pair = findBestPairToBase(baseType);
+                    String source = pair.getSource();
+                    if (source != null) {
+                        Double p = this.exchange.getBestAsk(source).get(0);
+                        firstRoundBuy(source, p, usdt, true);
+                    } else {
+                        String pl = pair.getLast();
+                        Double plPrice = this.exchange.getBestAsk(pl).get(0);
+                        String pm = pair.getMiddle();
+                        Double pmPrice = this.exchange.getBestBid(pm).get(0);
+                        TradeInfo tradeInfo = firstRoundBuy(pl, plPrice, usdt, false);
+                        sell(pm, pmPrice, tradeInfo.getQty(), tenMin);
+                    }
+                } else if (getSpreed.isCompletedExceptionally()) {
+                    sell(triangular.getSource(), sourcePrice, new BigDecimal(base), tenMin);
                 }
+                initCapital();
+                return;
             }
         }
     }
 
-    private Triangular findBestPairToUsdt() {
+    private void clockwiseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                                    String usdt, String base, String baseType, int timeout) {
+        CompletableFuture<TradeInfo> buyBase = CompletableFuture
+                .supplyAsync(() -> firstRoundBuy(triangular.getSource(), sourcePrice, usdt, false));
+
+        CompletableFuture<TradeInfo> getSpreed = CompletableFuture
+                .supplyAsync(() -> {
+                    TradeInfo middleTradeInfo = firstRoundBuy(triangular.getMiddle(), middlePrice, base, false);
+                    return sell(triangular.getLast(), lastPrice, middleTradeInfo.getQty(), timeout);
+                });
+        for (;;) {
+            if (buyBase.isDone() && getSpreed.isDone()) {
+                if (buyBase.isCompletedExceptionally() && getSpreed.isCompletedExceptionally()) {
+                    log.info("Both failed, so give up.");
+                } else if (buyBase.isCompletedExceptionally()) {
+                    log.info("Buy btcusdt failed, buy it now.");
+                    firstRoundBuy(triangular.getSource(), sourcePrice, usdt, true);
+                } else if (getSpreed.isCompletedExceptionally()) {
+                    Triangular pair = findBestPairToUsdt(baseType);
+                    log.info("Buy alt coin failed, try again with new pair: {}.", pair);
+                    String source = pair.getSource();
+                    if (source != null) {
+                        Double p = this.exchange.getBestBid(source).get(0);
+                        sell(source, p, new BigDecimal(base), timeout);
+                    } else {
+                        String pm = pair.getMiddle();
+                        Double pmPrice = this.exchange.getBestAsk(pm).get(0);
+                        String pl = pair.getLast();
+                        Double plPrice = this.exchange.getBestBid(pl).get(0);
+                        TradeInfo middleTradeInfo = firstRoundBuy(pm, pmPrice, base, false);
+                        sell(pl, plPrice, middleTradeInfo.getQty(), timeout);
+                    }
+                }
+                initCapital();
+                return;
+            }
+        }
+    }
+
+    private Triangular findBestPairToUsdt(String base) {
+        List<Triangular> tList;
         Triangular bestPair = null;
         double max = -1;
-        for (Triangular p : this.btcusdtPairList) {
+        if ("btc".equals(base)) {
+            tList = btcusdtPairList;
+        } else if ("eth".equals(base)) {
+            tList = ethusdtPairList;
+        } else {
+            throw new IllegalArgumentException("Unknown base:" + base);
+        }
+        for (Triangular p : tList) {
             String middle = p.getMiddle();
             String last = p.getLast();
             List<Double> bestAsk = this.exchange.getBestAsk(middle);
@@ -272,8 +337,47 @@ public class HuobiTriangleArbitrage {
         List<Double> btcusdt = this.exchange.getBestBid("btcusdt");
         if (btcusdt != null) {
             Double price = btcusdt.get(0);
-            if (price > max*COMMISSION) {
+            if (price < max*COMMISSION) {
                 return new Triangular("btcusdt", null, null);
+            }
+        }
+        return new Triangular(null, bestPair.getMiddle(), bestPair.getLast());
+    }
+
+    private Triangular findBestPairToBase(String base) {
+        List<Triangular> tList;
+        Triangular bestPair = null;
+        double min = Double.MAX_VALUE;
+        if ("btc".equals(base)) {
+            tList = btcusdtPairList;
+        } else if ("eth".equals(base)) {
+            tList = ethusdtPairList;
+        } else {
+            throw new IllegalArgumentException("Unknown base:" + base);
+        }
+
+        for (Triangular p : tList) {
+            String last = p.getLast();
+            String middle = p.getMiddle();
+            List<Double> bestBid = this.exchange.getBestBid(last);
+            List<Double> bestAsk = this.exchange.getBestAsk(middle);
+            if (bestAsk == null || bestBid == null) {
+                continue;
+            }
+            Double lastPrice = bestBid.get(0);
+            Double middlePrice = bestAsk.get(0);
+            double rate = lastPrice / middlePrice;
+            if (rate < min) {
+                min = rate;
+                bestPair = p;
+            }
+        }
+        String symbol = base + "usdt";
+        List<Double> baseAsk = this.exchange.getBestAsk(symbol);
+        if (baseAsk != null) {
+            Double price = baseAsk.get(0);
+            if (price > min*COMMISSION) {
+                return new Triangular(symbol, null, null);
             }
         }
         return new Triangular(null, bestPair.getMiddle(), bestPair.getLast());
