@@ -61,7 +61,7 @@ public class BinanceTriangleArbitrageTest {
 
     @Test
     public void test3() {
-        NewOrderResponse response = this.exchange.limitSell("BTCUSDT", TimeInForce.IOC, "0.001571", "6367.33", 50000);
+        NewOrderResponse response = this.exchange.limitBuy("ETHUSDT", TimeInForce.IOC, "0.04", "300.99", 50000);
         System.out.println(response.getOrderId());
         System.out.println(response.getStatus());
     }
@@ -90,12 +90,21 @@ public class BinanceTriangleArbitrageTest {
     @Test
     public void test7() {
         ExchangeInfo exchangeInfo = this.exchange.getExchangeInfo();
-        SymbolInfo si = exchangeInfo.getSymbolInfo("BCCBTC");
+        SymbolInfo si = exchangeInfo.getSymbolInfo("ETHUSDT");
         SymbolFilter symbolFilter = si.getSymbolFilter(FilterType.LOT_SIZE);
-        String minQty = symbolFilter.getMinQty();
-        String maxQty = symbolFilter.getMaxQty();
-        System.out.println(minQty);
-        System.out.println(maxQty);
+        System.out.println(symbolFilter.getMinQty());
+        SymbolFilter symbolFilter1 = si.getSymbolFilter(FilterType.MIN_NOTIONAL);
+        System.out.println(symbolFilter1.getMinNotional());
+        System.out.println(si.getBaseAssetPrecision());
+        System.out.println(si.getQuotePrecision());
+
+    }
+
+    @Test
+    public void test8() {
+        ExchangeInfo exchangeInfo = this.exchange.getExchangeInfo();
+        SymbolInfo btcusdt = exchangeInfo.getSymbolInfo("BTCUSDT");
+        System.out.println(btcusdt.getBaseAsset());
     }
 
 }

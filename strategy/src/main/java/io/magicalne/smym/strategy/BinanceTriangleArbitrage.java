@@ -31,7 +31,7 @@ public class BinanceTriangleArbitrage {
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.001;
+    private static final double UPPER_BOUND = 1.0001;
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
@@ -142,7 +142,7 @@ public class BinanceTriangleArbitrage {
         }
         for (Triangular triangular : pairList) {
             //use order book price level
-            final int priceLevel = 0;
+            final int priceLevel = 1;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
@@ -164,7 +164,7 @@ public class BinanceTriangleArbitrage {
                             triangular.getMiddle(), middle,
                             triangular.getLast(), last,
                             profit);
-                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
+//                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
                 }
             }
 
@@ -182,7 +182,7 @@ public class BinanceTriangleArbitrage {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
                             priceLevel+1, triangular.getLast(), last, triangular.getMiddle(), middle,
                             triangular.getSource(), source, profit);
-                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
+//                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
                 }
             }
         }
