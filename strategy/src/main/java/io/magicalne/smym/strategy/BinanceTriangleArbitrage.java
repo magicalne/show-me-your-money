@@ -191,15 +191,19 @@ public class BinanceTriangleArbitrage {
     public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
                        String usdt, String assetQty, String assetType, boolean clockwise) {
 
+        boolean traded;
         if (clockwise) {
-            clockwiseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType);
+            traded = clockwiseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType);
         } else {
-            reverseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType);
+            traded = reverseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType);
+        }
+        if (traded) {
+            initCapital();
         }
     }
 
-    private void clockwiseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
-                                    String usdt, String base, String baseType) {
+    private boolean clockwiseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                                       String usdt, String base, String baseType) {
         CompletableFuture<TradeInfo> buyBase = CompletableFuture
                 .supplyAsync(() -> quickBuy(triangular.getSource(), sourcePrice, usdt, false));
 
@@ -212,6 +216,7 @@ public class BinanceTriangleArbitrage {
             if (buyBase.isDone() && getSpreed.isDone()) {
                 if (buyBase.isCompletedExceptionally() && getSpreed.isCompletedExceptionally()) {
                     log.info("Both failed, so give up.");
+                    return false;
                 } else if (buyBase.isCompletedExceptionally()) {
                     log.info("Buy btcusdt failed, buy it now.");
                     quickBuy(triangular.getSource(), sourcePrice, usdt, true);
@@ -231,14 +236,13 @@ public class BinanceTriangleArbitrage {
                         quickSell(pl, Double.parseDouble(plPrice), middleTradeInfo.getQty(), true);
                     }
                 }
-                initCapital();
-                return;
+                return true;
             }
         }
     }
 
-    private void reverseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
-                                  String usdt, String base, String baseType) {
+    private boolean reverseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                                     String usdt, String base, String baseType) {
         CompletableFuture<TradeInfo> buyBase = CompletableFuture
                 .supplyAsync(() -> {
                     TradeInfo tradeInfo = quickBuy(triangular.getLast(), lastPrice, usdt, false);
@@ -251,7 +255,7 @@ public class BinanceTriangleArbitrage {
             if (buyBase.isDone() && getSpreed.isDone()) {
                 if (buyBase.isCompletedExceptionally() && getSpreed.isCompletedExceptionally()) {
                     log.info("Both failed, so give up.");
-                    return;
+                    return false;
                 } else if (buyBase.isCompletedExceptionally()) {
                     log.info("Buy base failed, buy it now.");
 
@@ -271,8 +275,7 @@ public class BinanceTriangleArbitrage {
                 } else if (getSpreed.isCompletedExceptionally()) {
                     quickSell(triangular.getSource(), sourcePrice, new BigDecimal(base), true);
                 }
-                initCapital();
-                return;
+                return true;
             }
         }
     }
