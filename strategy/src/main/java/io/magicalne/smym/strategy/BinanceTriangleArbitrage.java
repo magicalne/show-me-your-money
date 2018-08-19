@@ -30,7 +30,7 @@ public class BinanceTriangleArbitrage {
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.01;
+    private static final double UPPER_BOUND = 1.001;
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
