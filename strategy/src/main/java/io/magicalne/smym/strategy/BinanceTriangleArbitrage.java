@@ -396,11 +396,11 @@ public class BinanceTriangleArbitrage {
                 bestPair = p;
             }
         }
-        OrderBookEntry btcusdt = this.exchange.getBestBid("btcusdt");
+        OrderBookEntry btcusdt = this.exchange.getBestBid("BTCUSDT");
         if (btcusdt != null) {
             Double price = Double.valueOf(btcusdt.getPrice());
             if (price < max*COMMISSION.doubleValue()) {
-                return new Triangular("btcusdt", null, null);
+                return new Triangular("BTCUSDT", null, null);
             }
         }
         return new Triangular(null, bestPair.getMiddle(), bestPair.getLast());
