@@ -37,9 +37,9 @@ public class BinanceTriangleArbitrage {
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
-    private String usdtCapital = "9";
-    private String btcCapital = "0.0009";
-    private String ethCapital = "0.0099";
+    private String usdtCapital = "15";
+    private String btcCapital = "0.002";
+    private String ethCapital = "0.05";
 
     private final BinanceExchange exchange;
     private List<Triangular> btcusdtPairList;
