@@ -61,7 +61,7 @@ public class BinanceTriangleArbitrageTest {
 
     @Test
     public void test3() {
-        NewOrderResponse response = this.exchange.limitBuy("ETHUSDT", TimeInForce.IOC, "0.04", "300.99", 50000);
+        NewOrderResponse response = this.exchange.limitBuy("ETHUSDT", TimeInForce.IOC, "0.05", "300.99", 50000);
         System.out.println(response.getOrderId());
         System.out.println(response.getStatus());
     }
@@ -97,6 +97,8 @@ public class BinanceTriangleArbitrageTest {
         System.out.println(symbolFilter1.getMinNotional());
         System.out.println(si.getBaseAssetPrecision());
         System.out.println(si.getQuotePrecision());
+        SymbolFilter symbolFilter2 = si.getSymbolFilter(FilterType.PRICE_FILTER);
+        System.out.println(symbolFilter2.getTickSize());
 
     }
 

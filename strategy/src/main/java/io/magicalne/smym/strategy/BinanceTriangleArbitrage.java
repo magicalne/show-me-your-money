@@ -6,6 +6,8 @@ import com.binance.api.client.domain.account.Account;
 import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.general.ExchangeInfo;
+import com.binance.api.client.domain.general.FilterType;
+import com.binance.api.client.domain.general.SymbolFilter;
 import com.binance.api.client.domain.general.SymbolInfo;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
@@ -35,9 +37,9 @@ public class BinanceTriangleArbitrage {
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
-    private String usdtCapital = "4";
-    private String btcCapital = "0.0004";
-    private String ethCapital = "0.007";
+    private String usdtCapital = "9";
+    private String btcCapital = "0.0009";
+    private String ethCapital = "0.0099";
 
     private final BinanceExchange exchange;
     private List<Triangular> btcusdtPairList;
@@ -142,7 +144,7 @@ public class BinanceTriangleArbitrage {
         }
         for (Triangular triangular : pairList) {
             //use order book price level
-            final int priceLevel = 1;
+            final int priceLevel = 0;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
@@ -164,7 +166,7 @@ public class BinanceTriangleArbitrage {
                             triangular.getMiddle(), middle,
                             triangular.getLast(), last,
                             profit);
-//                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
+                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
                 }
             }
 
@@ -182,7 +184,7 @@ public class BinanceTriangleArbitrage {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
                             priceLevel+1, triangular.getLast(), last, triangular.getMiddle(), middle,
                             triangular.getSource(), source, profit);
-//                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
+                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
                 }
             }
         }
@@ -280,13 +282,27 @@ public class BinanceTriangleArbitrage {
         }
     }
 
-    private TradeInfo quickBuy(String symbol, double price, String quoteQty, boolean force) {
+    private int getQtyPrecision(String symbol) {
         SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
-        int basePrecision = symbolInfo.getBaseAssetPrecision();
-        int quotePrecision = symbolInfo.getQuotePrecision();
+        SymbolFilter lotSize = symbolInfo.getSymbolFilter(FilterType.LOT_SIZE);
+        String minQty = lotSize.getMinQty();
+        int index = minQty.indexOf('1');
+        return index == 0 ? index : index - 1;
+    }
+
+    private int getPricePrecision(String symbol) {
+        SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
+        SymbolFilter priceFilter = symbolInfo.getSymbolFilter(FilterType.PRICE_FILTER);
+        String tickSize = priceFilter.getTickSize();
+        int index = tickSize.indexOf("1");
+        return index == 0 ? index : index - 1;
+    }
+
+    private TradeInfo quickBuy(String symbol, double price, String quoteQty, boolean force) {
+        int basePrecision = getQtyPrecision(symbol);
+        int quotePrecision = getPricePrecision(symbol);
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
-        int biggerPrecision = basePrecision > quotePrecision ? basePrecision : quotePrecision;
-        BigDecimal q = new BigDecimal(quoteQty).setScale(biggerPrecision, RoundingMode.DOWN);
+        BigDecimal q = new BigDecimal(quoteQty).setScale(quotePrecision, RoundingMode.DOWN);
         BigDecimal qty = q.divide(p, RoundingMode.DOWN).setScale(basePrecision, RoundingMode.DOWN);
 
         String qtyStr = qty.toPlainString();
@@ -309,9 +325,8 @@ public class BinanceTriangleArbitrage {
     }
 
     private TradeInfo quickSell(String symbol, double price, String baseQty, boolean force) {
-        SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
-        int basePrecision = symbolInfo.getBaseAssetPrecision();
-        int quotePrecision = symbolInfo.getQuotePrecision();
+        int basePrecision = getQtyPrecision(symbol);
+        int quotePrecision = getPricePrecision(symbol);
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
         String baseQtyStr = new BigDecimal(baseQty).setScale(basePrecision, RoundingMode.DOWN).toPlainString();
         String priceStr = p.toPlainString();
@@ -333,9 +348,8 @@ public class BinanceTriangleArbitrage {
     }
 
     private TradeInfo quickSell(String symbol, double price, BigDecimal baseQty, boolean force) {
-        SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
-        int basePrecision = symbolInfo.getBaseAssetPrecision();
-        int quotePrecision = symbolInfo.getQuotePrecision();
+        int basePrecision = getQtyPrecision(symbol);
+        int quotePrecision = getPricePrecision(symbol);
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
         String baseQtyStr = baseQty.setScale(basePrecision, RoundingMode.DOWN).toPlainString();
         String priceStr = p.toPlainString();
