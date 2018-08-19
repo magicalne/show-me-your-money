@@ -157,14 +157,14 @@ public class HuobiTriangleArbitrage {
         }
     }
 
-    private void findArbitrage(List<Triangular> pairList, String baseType) {
-        String baseQty;
-        if ("btc".equals(baseType)) {
-            baseQty = this.btc;
-        } else if ("eth".equals(baseType)) {
-            baseQty = this.eth;
+    private void findArbitrage(List<Triangular> pairList, String assetType) {
+        String assetQty;
+        if ("btc".equals(assetType)) {
+            assetQty = this.btc;
+        } else if ("eth".equals(assetType)) {
+            assetQty = this.eth;
         } else {
-            throw new IllegalArgumentException("Wrong argument: baseType: " + baseType);
+            throw new IllegalArgumentException("Wrong argument: baseType: " + assetType);
         }
         for (Triangular triangular : pairList) {
             final int priceLevel = 0;
@@ -195,7 +195,7 @@ public class HuobiTriangleArbitrage {
                         triangular.getMiddle(), middle,
                         triangular.getLast(), last,
                         profit);
-                takeIt(triangular, source, middle, last, this.usdt, baseQty, baseType,true);
+                takeIt(triangular, source, middle, last, this.usdt, assetQty, assetType,true);
             }
             //reverse clockwise
             List<List<Double>> sourceDepthBids = sourceDepth.getBids();
@@ -212,19 +212,19 @@ public class HuobiTriangleArbitrage {
                         triangular.getMiddle(), middle,
                         triangular.getSource(), source,
                         profit);
-                takeIt(triangular, source, middle, last, this.usdt, baseQty, baseType,false);
+                takeIt(triangular, source, middle, last, this.usdt, assetQty, assetType,false);
             }
         }
     }
 
     public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
-                        String usdt, String base, String baseType, boolean clockwise) {
+                        String usdt, String assetQty, String assetType, boolean clockwise) {
 
         int tenMin = 600000;
         if (clockwise) {
-            clockwiseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, base, baseType, tenMin);
+            clockwiseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType, tenMin);
         } else {
-            reverseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, base, baseType, tenMin);
+            reverseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType, tenMin);
         }
     }
 

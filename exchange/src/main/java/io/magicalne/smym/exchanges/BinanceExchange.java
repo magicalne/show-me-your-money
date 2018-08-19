@@ -6,6 +6,7 @@ import com.binance.api.client.domain.account.Account;
 import com.binance.api.client.domain.account.NewOrder;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.Order;
+import com.binance.api.client.domain.account.request.AllOrdersRequest;
 import com.binance.api.client.domain.account.request.OrderStatusRequest;
 import com.binance.api.client.domain.event.CandlestickEvent;
 import com.binance.api.client.domain.event.DepthEvent;
@@ -65,8 +66,23 @@ public class BinanceExchange {
         return this.orderBookMap.get(symbol);
     }
 
+    public List<Order> orderHistory(String symbol) {
+        AllOrdersRequest req = new AllOrdersRequest(symbol);
+        return this.restClient.getAllOrders(req);
+    }
+
     public Order queryOrder(String symbol, long orderId) {
         return this.restClient.getOrderStatus(new OrderStatusRequest(symbol, orderId));
+    }
+
+    public NewOrderResponse marketSell(String symbol, String qty) {
+        NewOrder newOrder = NewOrder.marketSell(symbol, qty);
+        return this.restClient.newOrder(newOrder);
+    }
+
+    public NewOrderResponse marketBuy(String symbol, String qty) {
+        NewOrder newOrder = NewOrder.marketBuy(symbol, qty);
+        return this.restClient.newOrder(newOrder);
     }
 
     public NewOrderResponse limitBuy(String symbol, TimeInForce timeInForce, String quantity, String price,
@@ -170,5 +186,27 @@ public class BinanceExchange {
 
     public ExchangeInfo getExchangeInfo() {
         return this.restClient.getExchangeInfo();
+    }
+
+    public OrderBookEntry getBestAsk(String symbol) {
+        OrderBook orderBook = this.orderBookMap.get(symbol);
+        if (orderBook != null) {
+            List<OrderBookEntry> asks = orderBook.getAsks();
+            if (asks != null && !asks.isEmpty()) {
+                return asks.get(0);
+            }
+        }
+        return null;
+    }
+
+    public OrderBookEntry getBestBid(String symbol) {
+        OrderBook orderBook = this.orderBookMap.get(symbol);
+        if (orderBook != null) {
+            List<OrderBookEntry> bids = orderBook.getBids();
+            if (bids != null && !bids.isEmpty()) {
+                return bids.get(0);
+            }
+        }
+        return null;
     }
 }

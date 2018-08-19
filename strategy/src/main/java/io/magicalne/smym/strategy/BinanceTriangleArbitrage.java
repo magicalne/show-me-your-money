@@ -2,30 +2,41 @@ package io.magicalne.smym.strategy;
 
 import com.binance.api.client.domain.OrderStatus;
 import com.binance.api.client.domain.TimeInForce;
+import com.binance.api.client.domain.account.Account;
+import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.general.ExchangeInfo;
 import com.binance.api.client.domain.general.SymbolInfo;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
+import io.magicalne.smym.dto.TradeInfo;
 import io.magicalne.smym.dto.Triangular;
+import io.magicalne.smym.exception.BuyFailureException;
+import io.magicalne.smym.exception.SellFailureException;
 import io.magicalne.smym.exchanges.BinanceExchange;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
 public class BinanceTriangleArbitrage {
 
     private static final double TRIPLE_COMMISSION = 0.999*0.999*0.999;
+    private static final BigDecimal COMMISSION = new BigDecimal("0.999").setScale(3, RoundingMode.HALF_EVEN);
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.005;
+    private static final double UPPER_BOUND = 1.01;
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
+
+    private String usdtCapital = "2";
+    private String btcCapital = "0.0003";
+    private String ethCapital = "0.007";
 
     private final BinanceExchange exchange;
     private List<Triangular> btcusdtPairList;
@@ -83,17 +94,49 @@ public class BinanceTriangleArbitrage {
         this.exchange.createLocalOrderBook(symbolSet, 10);
     }
 
-    public void test() {
-        for (;;) {
-            findArbitrage(this.btcusdtPairList);
-            findArbitrage(this.ethusdtPairList);
+    private void initCapital() {
+        String newUSDT = getCapitalFromBalance(USDT);
+        String newBTC = getCapitalFromBalance(BTC);
+        String newETH = getCapitalFromBalance(ETH);
+        log.info("Before trade, usdt: {}, btc: {}, eth: {}", this.usdtCapital, this.btcCapital, this.ethCapital);
+        this.usdtCapital = getMin(newUSDT, this.usdtCapital);
+        this.btcCapital = getMin(newBTC, this.btcCapital);
+        this.ethCapital = getMin(newETH, this.ethCapital);
+
+        log.info("After trade,  usdt: {}, btc: {}, eth: {}", this.usdtCapital, this.btcCapital, this.ethCapital);
+    }
+
+    private String getMin(String balanceFromAccount, String preset) {
+        return Double.parseDouble(balanceFromAccount) > Double.parseDouble(preset) ? preset : balanceFromAccount;
+    }
+
+    private String getCapitalFromBalance(String asset) {
+        Account account = this.exchange.getAccount();
+        AssetBalance assetBalance = account.getAssetBalance(asset);
+        return assetBalance.getFree();
+    }
+
+    public void run() {
+
+        initCapital();
+        for (; ; ) {
+            findArbitrage(this.btcusdtPairList, BTC);
+            findArbitrage(this.ethusdtPairList, ETH);
         }
     }
 
-    private void findArbitrage(List<Triangular> btcusdtPairList) {
+    private void findArbitrage(List<Triangular> btcusdtPairList, String assetType) {
+        String assetQty;
+        if (BTC.equals(assetType)) {
+            assetQty = this.btcCapital;
+        } else if (ETH.equals(assetType)) {
+            assetQty = this.ethCapital;
+        } else {
+            throw new IllegalArgumentException("Wrong argument: baseType: " + assetType);
+        }
         for (Triangular triangular : btcusdtPairList) {
             //use order book price level
-            final int priceLevel = 0;
+            final int priceLevel = 1;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
             OrderBook middleOB = this.exchange.getOrderBook(triangular.getMiddle());
             OrderBook lastOB = this.exchange.getOrderBook(triangular.getLast());
@@ -107,7 +150,7 @@ public class BinanceTriangleArbitrage {
                 double source = Double.parseDouble(sourceOBAsks.get(priceLevel).getPrice());
                 double middle = Double.parseDouble(middleOBAsks.get(priceLevel).getPrice());
                 double last = Double.parseDouble(lastOBBids.get(priceLevel).getPrice());
-                double profit = getClockwise(source*BUY_SLIPPAGE, middle*BUY_SLIPPAGE, last*SELL_SLIPPAGE);
+                double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
                             priceLevel+1,
@@ -115,6 +158,7 @@ public class BinanceTriangleArbitrage {
                             triangular.getMiddle(), middle,
                             triangular.getLast(), last,
                             profit);
+                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
                 }
             }
 
@@ -127,96 +171,254 @@ public class BinanceTriangleArbitrage {
                 double source = Double.parseDouble(sourceOBBids.get(priceLevel).getPrice());
                 double middle = Double.parseDouble(middleOBBids.get(priceLevel).getPrice());
                 double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
-                double profit = getClockwise(source*SELL_SLIPPAGE, middle*SELL_SLIPPAGE, last*BUY_SLIPPAGE);
+                double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
                             priceLevel+1, triangular.getLast(), last, triangular.getMiddle(), middle,
                             triangular.getSource(), source, profit);
+                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
                 }
             }
         }
     }
 
-    private String buyFirstRound(String symbol, String quoteQuantity, String price) {
-        String baseQuantity = getBaseQuantity(symbol, quoteQuantity, price);
-        NewOrderResponse response = this.exchange.limitBuy(symbol, TimeInForce.IOC, baseQuantity, price, 100);
-        OrderStatus status = response.getStatus();
-        if (status == OrderStatus.CANCELED || status == OrderStatus.REJECTED || status == OrderStatus.EXPIRED) {
-            return null;
+    public void takeIt(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                       String usdt, String assetQty, String assetType, boolean clockwise) {
+
+        if (clockwise) {
+            clockwiseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType);
         } else {
-            return response.getExecutedQty();
+            reverseArbitrage(triangular, sourcePrice, middlePrice, lastPrice, usdt, assetQty, assetType);
         }
     }
-//
-//    private String buySecondRound(String symbol, String quoteQuantity, String price) {
-//        String baseQuantity = getBaseQuantity(symbol, quoteQuantity, price);
-//
-//    }
 
-    private String getBaseQuantity(String symbol, String quoteQuantity, String price) {
+    private void clockwiseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                                    String usdt, String base, String baseType) {
+        CompletableFuture<TradeInfo> buyBase = CompletableFuture
+                .supplyAsync(() -> quickBuy(triangular.getSource(), sourcePrice, usdt, false));
+
+        CompletableFuture<TradeInfo> getSpreed = CompletableFuture
+                .supplyAsync(() -> {
+                    TradeInfo middleTradeInfo = quickBuy(triangular.getMiddle(), middlePrice, base, false);
+                    return quickSell(triangular.getLast(), lastPrice, middleTradeInfo.getQty(), true);
+                });
+        for (;;) {
+            if (buyBase.isDone() && getSpreed.isDone()) {
+                if (buyBase.isCompletedExceptionally() && getSpreed.isCompletedExceptionally()) {
+                    log.info("Both failed, so give up.");
+                } else if (buyBase.isCompletedExceptionally()) {
+                    log.info("Buy btcusdt failed, buy it now.");
+                    quickBuy(triangular.getSource(), sourcePrice, usdt, true);
+                } else if (getSpreed.isCompletedExceptionally()) {
+                    Triangular pair = findBestPairToUsdt(baseType);
+                    log.info("Buy alt coin failed, try again with new pair: {}.", pair);
+                    String source = pair.getSource();
+                    if (source != null) {
+                        String p = this.exchange.getBestBid(source).getPrice();
+                        quickSell(source, Double.parseDouble(p), base, true);
+                    } else {
+                        String pm = pair.getMiddle();
+                        String pmPrice = this.exchange.getBestAsk(pm).getPrice();
+                        String pl = pair.getLast();
+                        String plPrice = this.exchange.getBestBid(pl).getPrice();
+                        TradeInfo middleTradeInfo = quickBuy(pm, Double.parseDouble(pmPrice), base, true);
+                        quickSell(pl, Double.parseDouble(plPrice), middleTradeInfo.getQty(), true);
+                    }
+                }
+                initCapital();
+                return;
+            }
+        }
+    }
+
+    private void reverseArbitrage(Triangular triangular, double sourcePrice, double middlePrice, double lastPrice,
+                                  String usdt, String base, String baseType) {
+        CompletableFuture<TradeInfo> buyBase = CompletableFuture
+                .supplyAsync(() -> {
+                    TradeInfo tradeInfo = quickBuy(triangular.getLast(), lastPrice, usdt, false);
+                    return quickSell(triangular.getMiddle(), middlePrice, tradeInfo.getQty(), true);
+                });
+
+        CompletableFuture<TradeInfo> getSpreed = CompletableFuture
+                .supplyAsync(() -> quickSell(triangular.getSource(), sourcePrice, new BigDecimal(base), false));
+        for (; ; ) {
+            if (buyBase.isDone() && getSpreed.isDone()) {
+                if (buyBase.isCompletedExceptionally() && getSpreed.isCompletedExceptionally()) {
+                    log.info("Both failed, so give up.");
+                    return;
+                } else if (buyBase.isCompletedExceptionally()) {
+                    log.info("Buy base failed, buy it now.");
+
+                    Triangular pair = findBestPairToBase(baseType);
+                    String source = pair.getSource();
+                    if (source != null) {
+                        String p = this.exchange.getBestAsk(source).getPrice();
+                        quickBuy(source, Double.parseDouble(p), usdt, true);
+                    } else {
+                        String pl = pair.getLast();
+                        Double plPrice = Double.valueOf(this.exchange.getBestAsk(pl).getPrice());
+                        String pm = pair.getMiddle();
+                        Double pmPrice = Double.valueOf(this.exchange.getBestBid(pm).getPrice());
+                        TradeInfo tradeInfo = quickBuy(pl, plPrice, usdt, true);
+                        quickSell(pm, pmPrice, tradeInfo.getQty(), true);
+                    }
+                } else if (getSpreed.isCompletedExceptionally()) {
+                    quickSell(triangular.getSource(), sourcePrice, new BigDecimal(base), true);
+                }
+                initCapital();
+                return;
+            }
+        }
+    }
+
+    private TradeInfo quickBuy(String symbol, double price, String quoteQty, boolean force) {
         SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
-        Integer baseAssetPrecision = symbolInfo.getBaseAssetPrecision();
-        Integer quotePrecision = symbolInfo.getQuotePrecision();
-        BigDecimal quote = new BigDecimal(quoteQuantity).setScale(quotePrecision, RoundingMode.DOWN);
-        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.DOWN);
-        return quote.divide(p, baseAssetPrecision).toPlainString();
-    }
+        int basePrecision = symbolInfo.getBaseAssetPrecision();
+        int quotePrecision = symbolInfo.getQuotePrecision();
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
+        int biggerPrecision = basePrecision > quotePrecision ? basePrecision : quotePrecision;
+        BigDecimal q = new BigDecimal(quoteQty).setScale(biggerPrecision, RoundingMode.DOWN);
+        BigDecimal qty = q.divide(p, RoundingMode.DOWN).setScale(basePrecision, RoundingMode.DOWN);
 
-    private double takeArbitrage(ArbitrageSpace arbitrageSpace, Triangular triangular) {
-        log.info("Find arbitrage space: {}", arbitrageSpace);
-
-        OrderBook sourceOrderBook = this.exchange.getOrderBook(triangular.getSource());
-        OrderBook middleOrderBook = this.exchange.getOrderBook(triangular.getMiddle());
-        OrderBook lastOrderBook = this.exchange.getOrderBook(triangular.getLast());
-
-        if (arbitrageSpace == ArbitrageSpace.CLOCKWISE) {
-            double source = getBestBidPrice(sourceOrderBook);
-            double middle = getBestBidPrice(middleOrderBook);
-            double last = getBestAskPrice(lastOrderBook);
-            return getClockwise(source, middle, last);
-        } else if (arbitrageSpace == ArbitrageSpace.REVERSE) {
-            double last = getBestBidPrice(lastOrderBook);
-            double middle = getBestAskPrice(middleOrderBook);
-            double source = getBestAskPrice(sourceOrderBook);
-            return getReverse(source, middle, last);
+        String qtyStr = qty.toPlainString();
+        String priceStr = p.toPlainString();
+        NewOrderResponse res = this.exchange.limitBuy(symbol, TimeInForce.IOC, qtyStr, priceStr, 500);
+        OrderStatus status = res.getStatus();
+        if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
+            return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
         }
-        return -1;
-    }
-
-    private double getBestBidPrice(OrderBook orderBook) {
-        if (orderBook != null) {
-            List<OrderBookEntry> bids = orderBook.getBids();
-            if (bids != null && !bids.isEmpty()) {
-                double p0 = Double.parseDouble(bids.get(0).getPrice());
-                double p1 = Double.parseDouble(bids.get(1).getPrice());
-                return (p0 + p1) / 2;
-            }
+        if (force) {
+            NewOrderResponse marketBuy = this.exchange.marketBuy(symbol, qtyStr);
+            return getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision);
         }
-        return -1;
+        throw new BuyFailureException(symbol, res.getOrderId());
     }
 
-    private double getBestAskPrice(OrderBook orderBook) {
-        if (orderBook != null) {
-            List<OrderBookEntry> asks = orderBook.getAsks();
-            if (asks != null && !asks.isEmpty()) {
-                double p0 = Double.parseDouble(asks.get(0).getPrice());
-                double p1 = Double.parseDouble(asks.get(1).getPrice());
-                return (p0 + p1) / 2;
-            }
+    private TradeInfo quickSell(String symbol, double price, String baseQty, boolean force) {
+        SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
+        int basePrecision = symbolInfo.getBaseAssetPrecision();
+        int quotePrecision = symbolInfo.getQuotePrecision();
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
+        String baseQtyStr = new BigDecimal(baseQty).setScale(basePrecision, RoundingMode.DOWN).toPlainString();
+        String priceStr = p.toPlainString();
+        NewOrderResponse res = this.exchange.limitSell(symbol,TimeInForce.IOC, baseQtyStr, priceStr, 500);
+        OrderStatus status = res.getStatus();
+        if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
+            return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
         }
-        return -1;
+        if (force) {
+            NewOrderResponse marketSell = this.exchange.marketSell(symbol, baseQtyStr);
+            return getTradeInfoFromOrder(marketSell, basePrecision, quotePrecision);
+        }
+        throw new SellFailureException(symbol, res.getOrderId());
     }
 
-    private ArbitrageSpace hasArbitrageSpace(double source, double middle, double last) {
-        double clockwise = getClockwise(source, middle, last);
-        double reverse = getReverse(source, middle, last);
-        if (clockwise > UPPER_BOUND) {
-            return ArbitrageSpace.CLOCKWISE;
-        } else if (reverse > UPPER_BOUND) {
-            return ArbitrageSpace.REVERSE;
+    private TradeInfo quickSell(String symbol, double price, BigDecimal baseQty, boolean force) {
+        SymbolInfo symbolInfo = this.exchangeInfo.getSymbolInfo(symbol);
+        int basePrecision = symbolInfo.getBaseAssetPrecision();
+        int quotePrecision = symbolInfo.getQuotePrecision();
+        BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
+        String baseQtyStr = baseQty.setScale(basePrecision, RoundingMode.DOWN).toPlainString();
+        String priceStr = p.toPlainString();
+        NewOrderResponse res = this.exchange.limitSell(symbol,TimeInForce.IOC, baseQtyStr, priceStr, 500);
+        OrderStatus status = res.getStatus();
+        if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
+            return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+        }
+        if (force) {
+            NewOrderResponse marketSell = this.exchange.marketSell(symbol, baseQtyStr);
+            return getTradeInfoFromOrder(marketSell, basePrecision, quotePrecision);
+        }
+        throw new SellFailureException(symbol, res.getOrderId());
+    }
+
+    private TradeInfo getTradeInfoFromOrder(NewOrderResponse res, int basePrecision, int quotePrecision) {
+        BigDecimal quotePrice = new BigDecimal(res.getPrice())
+                .setScale(quotePrecision, RoundingMode.UP);
+        TradeInfo tradeInfo = new TradeInfo();
+        tradeInfo.setPrice(quotePrice);
+        BigDecimal totalQty;
+        BigDecimal baseQty = new BigDecimal(res.getExecutedQty()).setScale(basePrecision, RoundingMode.DOWN);
+        totalQty = baseQty.multiply(COMMISSION);
+        tradeInfo.setQty(totalQty);
+
+        return tradeInfo;
+    }
+
+    private Triangular findBestPairToUsdt(String base) {
+        List<Triangular> tList;
+        Triangular bestPair = null;
+        double max = -1;
+        if (BTC.equals(base)) {
+            tList = btcusdtPairList;
+        } else if (ETH.equals(base)) {
+            tList = ethusdtPairList;
         } else {
-            return ArbitrageSpace.NONE;
+            throw new IllegalArgumentException("Unknown base:" + base);
         }
+        for (Triangular p : tList) {
+            String middle = p.getMiddle();
+            String last = p.getLast();
+            OrderBookEntry bestAsk = this.exchange.getBestAsk(middle);
+            OrderBookEntry bestBid = this.exchange.getBestBid(last);
+            if (bestAsk == null || bestBid == null) {
+                continue;
+            }
+            Double middlePrice = Double.valueOf(bestAsk.getPrice());
+            Double lastPrice = Double.valueOf(bestBid.getPrice());
+            double btcusdtPrice = lastPrice / middlePrice;
+            if (btcusdtPrice > max) {
+                max = btcusdtPrice;
+                bestPair = p;
+            }
+        }
+        OrderBookEntry btcusdt = this.exchange.getBestBid("btcusdt");
+        if (btcusdt != null) {
+            Double price = Double.valueOf(btcusdt.getPrice());
+            if (price < max*COMMISSION.doubleValue()) {
+                return new Triangular("btcusdt", null, null);
+            }
+        }
+        return new Triangular(null, bestPair.getMiddle(), bestPair.getLast());
+    }
+
+    private Triangular findBestPairToBase(String base) {
+        List<Triangular> tList;
+        Triangular bestPair = null;
+        double min = Double.MAX_VALUE;
+        if (BTC.equals(base)) {
+            tList = btcusdtPairList;
+        } else if (ETH.equals(base)) {
+            tList = ethusdtPairList;
+        } else {
+            throw new IllegalArgumentException("Unknown base:" + base);
+        }
+
+        for (Triangular p : tList) {
+            String last = p.getLast();
+            String middle = p.getMiddle();
+            OrderBookEntry bestBid = this.exchange.getBestBid(last);
+            OrderBookEntry bestAsk = this.exchange.getBestAsk(middle);
+            if (bestAsk == null || bestBid == null) {
+                continue;
+            }
+            Double lastPrice = Double.valueOf(bestBid.getPrice());
+            Double middlePrice = Double.valueOf(bestAsk.getPrice());
+            double rate = lastPrice / middlePrice;
+            if (rate < min) {
+                min = rate;
+                bestPair = p;
+            }
+        }
+        String symbol = base + "usdt";
+        OrderBookEntry baseAsk = this.exchange.getBestAsk(symbol);
+        if (baseAsk != null) {
+            Double price = Double.valueOf(baseAsk.getPrice());
+            if (price > min*COMMISSION.doubleValue()) {
+                return new Triangular(symbol, null, null);
+            }
+        }
+        return new Triangular(null, bestPair.getMiddle(), bestPair.getLast());
     }
 
     private double getReverse(double source, double middle, double last) {
@@ -227,17 +429,11 @@ public class BinanceTriangleArbitrage {
         return last / (source * middle) * TRIPLE_COMMISSION;
     }
 
-    enum ArbitrageSpace {
-        NONE,
-        CLOCKWISE,
-        REVERSE
-    }
-
     public static void main(String[] args) {
         String accessKey = System.getenv("BINANCE_ACCESS_KEY");
         String secretKey = System.getenv("BINANCE_ACCESS_SECRET_KEY");
         BinanceTriangleArbitrage strategy = new BinanceTriangleArbitrage(accessKey, secretKey);
         strategy.setup();
-        strategy.test();
+        strategy.run();
     }
 }
