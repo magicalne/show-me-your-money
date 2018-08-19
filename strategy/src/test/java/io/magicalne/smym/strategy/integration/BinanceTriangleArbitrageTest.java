@@ -5,6 +5,7 @@ import com.binance.api.client.domain.account.Account;
 import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.Order;
+import com.binance.api.client.domain.general.*;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
 import io.magicalne.smym.exchanges.BinanceExchange;
@@ -84,6 +85,17 @@ public class BinanceTriangleArbitrageTest {
         Account account = this.exchange.getAccount();
         AssetBalance assetBalance = account.getAssetBalance("BTC");
         System.out.println(assetBalance);
+    }
+
+    @Test
+    public void test7() {
+        ExchangeInfo exchangeInfo = this.exchange.getExchangeInfo();
+        SymbolInfo si = exchangeInfo.getSymbolInfo("BCCBTC");
+        SymbolFilter symbolFilter = si.getSymbolFilter(FilterType.LOT_SIZE);
+        String minQty = symbolFilter.getMinQty();
+        String maxQty = symbolFilter.getMaxQty();
+        System.out.println(minQty);
+        System.out.println(maxQty);
     }
 
 }
