@@ -60,7 +60,7 @@ public class BinanceTriangleArbitrageTest {
 
     @Test
     public void test3() {
-        NewOrderResponse response = this.exchange.limitBuy("ETHBTC", TimeInForce.IOC, "0.1", "0.02592", 50000);
+        NewOrderResponse response = this.exchange.limitSell("BTCUSDT", TimeInForce.IOC, "0.001571", "6367.33", 50000);
         System.out.println(response.getOrderId());
         System.out.println(response.getStatus());
     }
@@ -75,7 +75,7 @@ public class BinanceTriangleArbitrageTest {
 
     @Test
     public void test5() {
-        Order order = this.exchange.queryOrder("ETHBTC", 194779412);
+        Order order = this.exchange.queryOrder("BTCUSDT", 151429335);
         System.out.println(order);
     }
 

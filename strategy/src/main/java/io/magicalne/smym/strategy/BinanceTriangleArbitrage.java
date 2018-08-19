@@ -34,8 +34,8 @@ public class BinanceTriangleArbitrage {
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
-    private String usdtCapital = "2";
-    private String btcCapital = "0.0003";
+    private String usdtCapital = "4";
+    private String btcCapital = "0.0004";
     private String ethCapital = "0.007";
 
     private final BinanceExchange exchange;
@@ -95,9 +95,10 @@ public class BinanceTriangleArbitrage {
     }
 
     private void initCapital() {
-        String newUSDT = getCapitalFromBalance(USDT);
-        String newBTC = getCapitalFromBalance(BTC);
-        String newETH = getCapitalFromBalance(ETH);
+        List<String> balances = getCapitalFromBalance(Arrays.asList(USDT, BTC, ETH));
+        String newUSDT = balances.get(0);
+        String newBTC = balances.get(1);
+        String newETH = balances.get(2);
         log.info("Before trade, usdt: {}, btc: {}, eth: {}", this.usdtCapital, this.btcCapital, this.ethCapital);
         this.usdtCapital = getMin(newUSDT, this.usdtCapital);
         this.btcCapital = getMin(newBTC, this.btcCapital);
@@ -110,10 +111,14 @@ public class BinanceTriangleArbitrage {
         return Double.parseDouble(balanceFromAccount) > Double.parseDouble(preset) ? preset : balanceFromAccount;
     }
 
-    private String getCapitalFromBalance(String asset) {
+    private List<String> getCapitalFromBalance(List<String> assets) {
         Account account = this.exchange.getAccount();
-        AssetBalance assetBalance = account.getAssetBalance(asset);
-        return assetBalance.getFree();
+        List<String> assetBalances = new ArrayList<>();
+        for (String a : assets) {
+            AssetBalance assetBalance = account.getAssetBalance(a);
+            assetBalances.add(assetBalance.getFree());
+        }
+        return assetBalances;
     }
 
     public void run() {
@@ -125,7 +130,7 @@ public class BinanceTriangleArbitrage {
         }
     }
 
-    private void findArbitrage(List<Triangular> btcusdtPairList, String assetType) {
+    private void findArbitrage(List<Triangular> pairList, String assetType) {
         String assetQty;
         if (BTC.equals(assetType)) {
             assetQty = this.btcCapital;
@@ -134,7 +139,7 @@ public class BinanceTriangleArbitrage {
         } else {
             throw new IllegalArgumentException("Wrong argument: baseType: " + assetType);
         }
-        for (Triangular triangular : btcusdtPairList) {
+        for (Triangular triangular : pairList) {
             //use order book price level
             final int priceLevel = 1;
             OrderBook sourceOB = this.exchange.getOrderBook(triangular.getSource());
@@ -171,12 +176,12 @@ public class BinanceTriangleArbitrage {
                 double source = Double.parseDouble(sourceOBBids.get(priceLevel).getPrice());
                 double middle = Double.parseDouble(middleOBBids.get(priceLevel).getPrice());
                 double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
-                double profit = getClockwise(source, middle, last);
+                double profit = getReverse(source, middle, last);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
                             priceLevel+1, triangular.getLast(), last, triangular.getMiddle(), middle,
                             triangular.getSource(), source, profit);
-                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
+                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
                 }
             }
         }
