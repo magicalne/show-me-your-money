@@ -1,6 +1,6 @@
 apply plugin: 'application'
 
-mainClassName = "io.magicalne.smym.strategy.HuobiTriangleArbitrage"
+mainClassName = "io.magicalne.smym.strategy.BinanceTriangleArbitrage"
 
 jar {
 
