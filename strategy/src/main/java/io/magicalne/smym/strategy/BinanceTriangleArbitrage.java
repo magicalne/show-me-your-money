@@ -9,6 +9,7 @@ import com.binance.api.client.domain.general.ExchangeInfo;
 import com.binance.api.client.domain.general.SymbolInfo;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
+import com.binance.api.client.exception.BinanceApiException;
 import io.magicalne.smym.dto.TradeInfo;
 import io.magicalne.smym.dto.Triangular;
 import io.magicalne.smym.exception.BuyFailureException;
@@ -287,16 +288,21 @@ public class BinanceTriangleArbitrage {
 
         String qtyStr = qty.toPlainString();
         String priceStr = p.toPlainString();
-        NewOrderResponse res = this.exchange.limitBuy(symbol, TimeInForce.IOC, qtyStr, priceStr, 500);
-        OrderStatus status = res.getStatus();
-        if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
-            return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+        NewOrderResponse res = null;
+        try {
+            res = this.exchange.limitBuy(symbol, TimeInForce.IOC, qtyStr, priceStr, 500);
+            OrderStatus status = res.getStatus();
+            if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
+                return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+            }
+            if (force) {
+                res = this.exchange.marketBuy(symbol, qtyStr);
+                return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+            }
+        } catch (BinanceApiException e) {
+            log.error("Failed to buy due to:", e);
         }
-        if (force) {
-            NewOrderResponse marketBuy = this.exchange.marketBuy(symbol, qtyStr);
-            return getTradeInfoFromOrder(marketBuy, basePrecision, quotePrecision);
-        }
-        throw new BuyFailureException(symbol, res.getOrderId());
+        throw new BuyFailureException(symbol, res == null ? null : res.getOrderId());
     }
 
     private TradeInfo quickSell(String symbol, double price, String baseQty, boolean force) {
@@ -306,16 +312,21 @@ public class BinanceTriangleArbitrage {
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
         String baseQtyStr = new BigDecimal(baseQty).setScale(basePrecision, RoundingMode.DOWN).toPlainString();
         String priceStr = p.toPlainString();
-        NewOrderResponse res = this.exchange.limitSell(symbol,TimeInForce.IOC, baseQtyStr, priceStr, 500);
-        OrderStatus status = res.getStatus();
-        if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
-            return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+        NewOrderResponse res = null;
+        try {
+            res = this.exchange.limitSell(symbol, TimeInForce.IOC, baseQtyStr, priceStr, 500);
+            OrderStatus status = res.getStatus();
+            if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
+                return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+            }
+            if (force) {
+                res = this.exchange.marketSell(symbol, baseQtyStr);
+                return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+            }
+        } catch (BinanceApiException e) {
+            log.error("Failed to sell due to:", e);
         }
-        if (force) {
-            NewOrderResponse marketSell = this.exchange.marketSell(symbol, baseQtyStr);
-            return getTradeInfoFromOrder(marketSell, basePrecision, quotePrecision);
-        }
-        throw new SellFailureException(symbol, res.getOrderId());
+        throw new SellFailureException(symbol, res == null ? null : res.getOrderId());
     }
 
     private TradeInfo quickSell(String symbol, double price, BigDecimal baseQty, boolean force) {
@@ -325,16 +336,21 @@ public class BinanceTriangleArbitrage {
         BigDecimal p = new BigDecimal(price).setScale(quotePrecision, RoundingMode.HALF_EVEN);
         String baseQtyStr = baseQty.setScale(basePrecision, RoundingMode.DOWN).toPlainString();
         String priceStr = p.toPlainString();
-        NewOrderResponse res = this.exchange.limitSell(symbol,TimeInForce.IOC, baseQtyStr, priceStr, 500);
-        OrderStatus status = res.getStatus();
-        if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
-            return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+        NewOrderResponse res = null;
+        try {
+            res = this.exchange.limitSell(symbol, TimeInForce.IOC, baseQtyStr, priceStr, 500);
+            OrderStatus status = res.getStatus();
+            if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
+                return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+            }
+            if (force) {
+                res = this.exchange.marketSell(symbol, baseQtyStr);
+                return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
+            }
+        } catch (BinanceApiException e) {
+            log.error("Failed to sell due to:", e);
         }
-        if (force) {
-            NewOrderResponse marketSell = this.exchange.marketSell(symbol, baseQtyStr);
-            return getTradeInfoFromOrder(marketSell, basePrecision, quotePrecision);
-        }
-        throw new SellFailureException(symbol, res.getOrderId());
+        throw new SellFailureException(symbol, res == null ? null : res.getOrderId());
     }
 
     private TradeInfo getTradeInfoFromOrder(NewOrderResponse res, int basePrecision, int quotePrecision) {
