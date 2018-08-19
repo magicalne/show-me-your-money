@@ -303,7 +303,7 @@ public class BinanceTriangleArbitrage {
                 return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
             }
         } catch (BinanceApiException e) {
-            log.error("Failed to buy due to:", e);
+            log.error("Failed to buy {} @{} of {}, due to:", symbol, priceStr, qtyStr, e);
         }
         throw new BuyFailureException(symbol, res == null ? null : res.getOrderId());
     }
@@ -327,7 +327,7 @@ public class BinanceTriangleArbitrage {
                 return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
             }
         } catch (BinanceApiException e) {
-            log.error("Failed to sell due to:", e);
+            log.error("Failed to sell {} @{} of {}, due to:", symbol, priceStr, baseQtyStr, e);
         }
         throw new SellFailureException(symbol, res == null ? null : res.getOrderId());
     }
@@ -351,7 +351,7 @@ public class BinanceTriangleArbitrage {
                 return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
             }
         } catch (BinanceApiException e) {
-            log.error("Failed to sell due to:", e);
+            log.error("Failed to sell {} @{} of {}, due to:", symbol, priceStr, baseQtyStr, e);
         }
         throw new SellFailureException(symbol, res == null ? null : res.getOrderId());
     }
