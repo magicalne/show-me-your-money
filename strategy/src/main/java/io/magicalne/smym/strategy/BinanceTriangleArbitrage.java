@@ -293,7 +293,7 @@ public class BinanceTriangleArbitrage {
         String priceStr = p.toPlainString();
         NewOrderResponse res = null;
         try {
-            res = this.exchange.limitBuy(symbol, TimeInForce.IOC, qtyStr, priceStr, 500);
+            res = this.exchange.limitBuy(symbol, TimeInForce.IOC, qtyStr, priceStr, 5000);
             OrderStatus status = res.getStatus();
             if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
                 return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
@@ -317,7 +317,7 @@ public class BinanceTriangleArbitrage {
         String priceStr = p.toPlainString();
         NewOrderResponse res = null;
         try {
-            res = this.exchange.limitSell(symbol, TimeInForce.IOC, baseQtyStr, priceStr, 500);
+            res = this.exchange.limitSell(symbol, TimeInForce.IOC, baseQtyStr, priceStr, 5000);
             OrderStatus status = res.getStatus();
             if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
                 return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
@@ -341,7 +341,7 @@ public class BinanceTriangleArbitrage {
         String priceStr = p.toPlainString();
         NewOrderResponse res = null;
         try {
-            res = this.exchange.limitSell(symbol, TimeInForce.IOC, baseQtyStr, priceStr, 500);
+            res = this.exchange.limitSell(symbol, TimeInForce.IOC, baseQtyStr, priceStr, 5000);
             OrderStatus status = res.getStatus();
             if (status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED) {
                 return getTradeInfoFromOrder(res, basePrecision, quotePrecision);
