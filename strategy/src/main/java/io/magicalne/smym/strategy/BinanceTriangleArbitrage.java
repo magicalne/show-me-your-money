@@ -28,12 +28,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BinanceTriangleArbitrage {
 
-    private static final double TRIPLE_COMMISSION = 0.999*0.999*0.999;
-    private static final BigDecimal COMMISSION = new BigDecimal("0.999").setScale(3, RoundingMode.HALF_EVEN);
+    private static final double TRIPLE_COMMISSION = 0.99925*0.99925*0.99925;
+    private static final BigDecimal COMMISSION = new BigDecimal("0.99925").setScale(3, RoundingMode.HALF_EVEN);
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.01;
+    private static final double UPPER_BOUND = 1.005;
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
