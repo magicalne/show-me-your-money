@@ -33,7 +33,7 @@ public class BinanceTriangleArbitrage {
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.001;
+    private static final double UPPER_BOUND = 1.01;
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
@@ -157,7 +157,7 @@ public class BinanceTriangleArbitrage {
                     lastOBBids != null && lastOBBids.size() > priceLevel+1) {
                 double source = Double.parseDouble(sourceOBAsks.get(priceLevel).getPrice());
                 double middle = Double.parseDouble(middleOBAsks.get(priceLevel).getPrice());
-                double last = Double.parseDouble(lastOBBids.get(priceLevel).getPrice());
+                double last = Double.parseDouble(lastOBBids.get(priceLevel+1).getPrice());
                 double profit = getClockwise(source, middle, last);
                 if (profit > UPPER_BOUND) {
                     log.info("Use {}st price in order book. Clockwise, {}: {} -> {}: {} -> {}: {}, profit: {}",
@@ -177,7 +177,7 @@ public class BinanceTriangleArbitrage {
                     middleOBBids != null && middleOBBids.size() > priceLevel+1 &&
                     lastOBAsks != null && lastOBAsks.size() > priceLevel+1) {
                 double source = Double.parseDouble(sourceOBBids.get(priceLevel).getPrice());
-                double middle = Double.parseDouble(middleOBBids.get(priceLevel).getPrice());
+                double middle = Double.parseDouble(middleOBBids.get(priceLevel+1).getPrice());
                 double last = Double.parseDouble(lastOBAsks.get(priceLevel).getPrice());
                 double profit = getReverse(source, middle, last);
                 if (profit > UPPER_BOUND) {
