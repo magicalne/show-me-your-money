@@ -73,6 +73,7 @@ public class MarketMakingV1 {
         .setScale(pricePrecision, RoundingMode.HALF_EVEN);
       NewOrderResponse newOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
       orderInfo.addAskOrderToHead(newOrder);
+      log.info("Grid: {}", orderInfo);
     }
 
     //check sell orders
@@ -99,6 +100,7 @@ public class MarketMakingV1 {
         .setScale(pricePrecision, RoundingMode.HALF_EVEN);
       NewOrderResponse newOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
       orderInfo.addBidOrderToHead(newOrder);
+      log.info("Grid: {}", orderInfo);
     }
   }
 
@@ -174,10 +176,10 @@ public class MarketMakingV1 {
       StringBuilder sb = new StringBuilder();
       sb.append("OrderInfo: \n")
         .append("bid: ");
-      bidOrders.forEach(r -> sb.append(r.getPrice()).append(" "));
+      bidOrders.forEach(r -> sb.append(r.getOrderId()).append(": ").append(r.getPrice()).append(" "));
       sb.append("\n")
         .append("ask: ");
-      askOrders.forEach(r -> sb.append(r.getPrice()).append(" "));
+      askOrders.forEach(r -> sb.append(r.getOrderId()).append(": ").append(r.getPrice()).append(" "));
 
       return sb.toString();
     }
