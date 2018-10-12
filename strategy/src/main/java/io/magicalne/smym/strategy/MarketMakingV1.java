@@ -4,10 +4,15 @@ import com.binance.api.client.domain.OrderStatus;
 import com.binance.api.client.domain.TimeInForce;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.Order;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.magicalne.smym.dto.MarketMakingConfig;
 import io.magicalne.smym.exchanges.BinanceExchange;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedList;
@@ -25,14 +30,20 @@ public class MarketMakingV1 {
   private final int gridSize;
   private final String initPrice;
 
-  public MarketMakingV1(String accessId, String secretKey,
-                        String symbol, String qtyUnit, String gridRate, int gridSize, String initPrice) {
+  public MarketMakingV1(String accessId, String secretKey, String path) throws IOException {
     this.symbol = symbol;
     this.qtyUnit = qtyUnit;
     this.gridRate = new BigDecimal(gridRate);
     this.gridSize = gridSize;
     this.initPrice = initPrice;
     this.exchange = new BinanceExchange(accessId, secretKey);
+    MarketMakingConfig config = readYaml(path);
+    config.getGrids().get(0);
+  }
+
+  private MarketMakingConfig readYaml(String path) throws IOException {
+    ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    return mapper.readValue(new File(path), MarketMakingConfig.class);
   }
 
   public void execute()

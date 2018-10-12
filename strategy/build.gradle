@@ -24,4 +24,6 @@ jar {
 
 dependencies {
     compile project(':exchange'), project(':common')
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.3.0'
+    compile 'org.apache.commons:commons-lang3:3.4'
 }

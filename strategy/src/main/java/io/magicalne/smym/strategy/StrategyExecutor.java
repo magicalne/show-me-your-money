@@ -1,11 +1,33 @@
 package io.magicalne.smym.strategy;
 
+import com.google.common.base.Preconditions;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 public class StrategyExecutor {
 
-  public static void main(String[] args) throws InterruptedException {
+  /**
+   *
+   * @param args args[0]: classpath, args[1]: yaml config file path
+   */
+  public static void main(String[] args)
+    throws InterruptedException,
+    ClassNotFoundException,
+    NoSuchMethodException,
+    IllegalAccessException,
+    InvocationTargetException,
+    InstantiationException {
     String accessKey = System.getenv("BINANCE_ACCESS_KEY");
     String secretKey = System.getenv("BINANCE_ACCESS_SECRET_KEY");
-    MarketMakingV1 mm = new MarketMakingV1(accessKey, secretKey, "BNBBTC", "1", "1.003", 3, "0.0015312");
-    mm.execute();
+    Preconditions.checkArgument(args.length == 2);
+    String classpath = args[0];
+    String yamlPath = args[1];
+    Class<?> clazz = Class.forName(classpath);
+    Constructor<?> constructor = clazz.getConstructor(String.class, String.class, String.class);
+    Object o = constructor.newInstance(accessKey, secretKey, yamlPath);
+    Method execute = o.getClass().getMethod("execute");
+    execute.invoke(o);
   }
 }
