@@ -79,7 +79,7 @@ public class MarketMakingV1 {
     //check sell orders
     NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
     order = this.exchange.queryOrder(symbol, firstAsk.getOrderId());
-    if (order.getStatus() == OrderStatus.FILLED) {
+    if (order.getStatus() == OrderStatus.FILLED && this.buys.get() > -gridSize) {
       log.info("Sell {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
       orderInfo.removeAskOrdersHead();
       buys.decrementAndGet();
