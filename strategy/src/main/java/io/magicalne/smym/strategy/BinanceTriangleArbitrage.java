@@ -33,17 +33,20 @@ public class BinanceTriangleArbitrage {
     private static final String USDT = "USDT";
     private static final String BTC = "BTC";
     private static final String ETH = "ETH";
-    private static final double UPPER_BOUND = 1.005;
+    private static final String BNB = "BNB";
+    private static final double UPPER_BOUND = 1.00001;
     private static final double BUY_SLIPPAGE = 1.000;
     private static final double SELL_SLIPPAGE = 1;
 
     private String usdtCapital = "15";
     private String btcCapital = "0.002";
     private String ethCapital = "0.05";
+    private String bnbCapital = "9";
 
     private final BinanceExchange exchange;
     private List<Triangular> btcusdtPairList;
     private List<Triangular> ethusdtPairList;
+    private List<Triangular> bnbusdtPairList;
     private ExchangeInfo exchangeInfo;
 
     public BinanceTriangleArbitrage(String accessId, String secretKey) {
@@ -59,12 +62,15 @@ public class BinanceTriangleArbitrage {
         List<SymbolInfo> usdtGrp = quoteGroup.get(USDT);
         List<SymbolInfo> btcGrp = quoteGroup.get(BTC);
         List<SymbolInfo> ethGrp = quoteGroup.get(ETH);
+        List<SymbolInfo> bnbGrp = quoteGroup.get(BNB);
 
         //usdt with btc
         List<Triangular> btcusdtPairList = new LinkedList<>();
         String btcusdt = "BTCUSDT";
         List<Triangular> ethusdtPairList = new LinkedList<>();
         String ethusdt = "ETHUSDT";
+        List<Triangular> bnbusdtPairList = new LinkedList<>();
+        String bnbusdt = "BNBUSDT";
         for (SymbolInfo u : usdtGrp) {
             for (SymbolInfo b : btcGrp) {
                 if (u.getBaseAsset().equals(b.getBaseAsset())) {
@@ -79,9 +85,17 @@ public class BinanceTriangleArbitrage {
                     ethusdtPairList.add(triangular);
                 }
             }
+
+            for (SymbolInfo b : bnbGrp) {
+                if (u.getBaseAsset().equals(b.getBaseAsset())) {
+                    Triangular triangular = new Triangular(bnbusdt, b.getBaseAsset() + BNB, b.getBaseAsset() + USDT);
+                    bnbusdtPairList.add(triangular);
+                }
+            }
         }
         this.btcusdtPairList = btcusdtPairList;
         this.ethusdtPairList = ethusdtPairList;
+        this.bnbusdtPairList = bnbusdtPairList;
 
         Set<String> symbolSet = new HashSet<>();
         btcusdtPairList.forEach(t -> {
@@ -90,6 +104,11 @@ public class BinanceTriangleArbitrage {
             symbolSet.add(t.getLast());
         });
         ethusdtPairList.forEach(t -> {
+            symbolSet.add(t.getSource());
+            symbolSet.add(t.getMiddle());
+            symbolSet.add(t.getLast());
+        });
+        bnbusdtPairList.forEach(t -> {
             symbolSet.add(t.getSource());
             symbolSet.add(t.getMiddle());
             symbolSet.add(t.getLast());
@@ -130,6 +149,7 @@ public class BinanceTriangleArbitrage {
         for (; ; ) {
             findArbitrage(this.btcusdtPairList, BTC);
             findArbitrage(this.ethusdtPairList, ETH);
+            findArbitrage(this.bnbusdtPairList, BNB);
         }
     }
 
@@ -166,7 +186,7 @@ public class BinanceTriangleArbitrage {
                             triangular.getMiddle(), middle,
                             triangular.getLast(), last,
                             profit);
-                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
+//                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,true);
                 }
             }
 
@@ -184,7 +204,7 @@ public class BinanceTriangleArbitrage {
                     log.info("Use {}st price in order book. Reverse, {}: {} -> {}: {} -> {}: {}, profit: {}",
                             priceLevel+1, triangular.getLast(), last, triangular.getMiddle(), middle,
                             triangular.getSource(), source, profit);
-                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
+//                    takeIt(triangular, source, middle, last, this.usdtCapital, assetQty, assetType,false);
                 }
             }
         }

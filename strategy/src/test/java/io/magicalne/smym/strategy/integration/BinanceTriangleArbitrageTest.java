@@ -90,7 +90,7 @@ public class BinanceTriangleArbitrageTest {
     @Test
     public void test7() {
         ExchangeInfo exchangeInfo = this.exchange.getExchangeInfo();
-        SymbolInfo si = exchangeInfo.getSymbolInfo("ETHUSDT");
+        SymbolInfo si = exchangeInfo.getSymbolInfo("BTCUSDT");
         SymbolFilter symbolFilter = si.getSymbolFilter(FilterType.LOT_SIZE);
         System.out.println(symbolFilter.getMinQty());
         SymbolFilter symbolFilter1 = si.getSymbolFilter(FilterType.MIN_NOTIONAL);
