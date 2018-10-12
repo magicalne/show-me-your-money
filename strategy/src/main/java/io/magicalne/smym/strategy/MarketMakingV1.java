@@ -56,6 +56,15 @@ public class MarketMakingV1 {
       log.info("Buy {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
       orderInfo.removeBidOrdersHead();
       buys.incrementAndGet();
+
+      //place new bid order to tail
+      NewOrderResponse bidOrdersTail = orderInfo.getBidOrdersTail();
+      BigDecimal bot = new BigDecimal(bidOrdersTail.getPrice());
+      BigDecimal newBid = bot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+      NewOrderResponse newBidOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
+      orderInfo.addBidOrder(newBidOrder);
+
+      //cancel tail ask order and place new ask order to head
       NewOrderResponse lastAsk = orderInfo.askOrders.getLast();
       this.exchange.cancelOrder(symbol, lastAsk.getOrderId());
       //add new ask order based on existed lowest ask price(header) to the head
@@ -73,6 +82,15 @@ public class MarketMakingV1 {
       log.info("Sell {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
       orderInfo.removeAskOrdersHead();
       buys.decrementAndGet();
+
+      //place new ask order to tail
+      NewOrderResponse askOrdersTail = orderInfo.getAskOrdersTail();
+      BigDecimal aot = new BigDecimal(askOrdersTail.getPrice());
+      BigDecimal newAsk = aot.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+      NewOrderResponse newAskOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
+      orderInfo.addAskOrder(newAskOrder);
+
+      //cancel tail bid order and place new bid order to head
       NewOrderResponse lastBid = orderInfo.bidOrders.getLast();
       this.exchange.cancelOrder(symbol, lastBid.getOrderId());
       //add new bid order based on existed highest bid price(header) to the head
@@ -141,6 +159,14 @@ public class MarketMakingV1 {
 
     void removeAskOrdersHead() {
       this.askOrders.removeFirst();
+    }
+
+    NewOrderResponse getBidOrdersTail() {
+      return bidOrders.getLast();
+    }
+
+    NewOrderResponse getAskOrdersTail() {
+      return askOrders.getLast();
     }
 
     @Override
