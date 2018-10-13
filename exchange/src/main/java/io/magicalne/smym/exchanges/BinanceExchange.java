@@ -118,14 +118,16 @@ public class BinanceExchange {
     this.restClient.cancelOrder(request);
   }
 
-  public void tryCancelOrder(String symbol, long orderId) {
+  public boolean tryCancelOrder(String symbol, long orderId) {
     CancelOrderRequest request = new CancelOrderRequest(symbol, orderId);
     try {
       this.restClient.cancelOrder(request);
+      return true;
     } catch(BinanceApiException e) {
       Order order = queryOrder(symbol, orderId);
       log.warn("Cannot cancel order: {}, {} due to {}", orderId, symbol, e);
       log.warn("Query order status: {}", order.getStatus());
+      return false;
     }
   }
 

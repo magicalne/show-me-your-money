@@ -1,0 +1,9 @@
+# grid trading
+---
+version: v1
+grids:
+  - symbol: BNBBTC
+    qtyUnit: 1
+    gridRate: 1.003
+    gridSize: 3
+    initPrice: 0.001526
