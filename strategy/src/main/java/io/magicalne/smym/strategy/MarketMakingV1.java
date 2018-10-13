@@ -46,6 +46,7 @@ public class MarketMakingV1 {
       } catch (BinanceApiException e) {
         log.error("Binance api exception: ", e);
       }
+      Thread.sleep(1000); //In case of "Too many new orders; current limit is 10 orders per SECOND".
     }
 
     for (;;) {
