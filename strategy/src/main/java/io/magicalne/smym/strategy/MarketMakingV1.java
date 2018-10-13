@@ -4,8 +4,11 @@ import com.binance.api.client.domain.OrderStatus;
 import com.binance.api.client.domain.TimeInForce;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.Order;
+import com.binance.api.client.exception.BinanceApiException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.common.base.Preconditions;
+import io.magicalne.smym.dto.GridTradeConfig;
 import io.magicalne.smym.dto.MarketMakingConfig;
 import io.magicalne.smym.exchanges.BinanceExchange;
 import lombok.Data;
@@ -16,29 +19,38 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 
 @Slf4j
 public class MarketMakingV1 {
 
-  private final AtomicInteger buys = new AtomicInteger(0);
   private final BinanceExchange exchange;
-  private final String symbol;
-  private final String qtyUnit;
-  private final BigDecimal gridRate;
-  private final int gridSize;
-  private final String initPrice;
+  private final List<GridTrading> gridTradings;
 
   public MarketMakingV1(String accessId, String secretKey, String path) throws IOException {
-    this.symbol = symbol;
-    this.qtyUnit = qtyUnit;
-    this.gridRate = new BigDecimal(gridRate);
-    this.gridSize = gridSize;
-    this.initPrice = initPrice;
     this.exchange = new BinanceExchange(accessId, secretKey);
     MarketMakingConfig config = readYaml(path);
-    config.getGrids().get(0);
+    gridTradings = init(config);
+  }
+
+  public void execute() {
+    for (GridTrading gridTrading : gridTradings) {
+      try {
+        gridTrading.execute();
+      } catch (BinanceApiException e) {
+        log.error("Binance api exception: ", e);
+      }
+    }
+  }
+  private List<GridTrading> init(MarketMakingConfig config) {
+    List<GridTradeConfig> grids = config.getGrids();
+    String errMsg = "There is no grid trading config!";
+    Preconditions.checkArgument(grids != null && !grids.isEmpty(), errMsg);
+
+    return grids.stream().map(g -> new GridTrading(exchange, g)).collect(Collectors.toList());
   }
 
   private MarketMakingConfig readYaml(String path) throws IOException {
@@ -46,104 +58,128 @@ public class MarketMakingV1 {
     return mapper.readValue(new File(path), MarketMakingConfig.class);
   }
 
-  public void execute()
-    throws InterruptedException {
-    OrderInfo orderInfo = placeOrdersInGrid();
-    log.info("Init order: {}", orderInfo);
+  private static class GridTrading {
+    private final AtomicInteger buys = new AtomicInteger(0);
+    private final BinanceExchange exchange;
+    private final String symbol;
+    private final String qtyUnit;
+    private final BigDecimal gridRate;
+    private final int gridSize;
+    private final String initPrice;
 
-    for (;;) {
-      checkFilledOrder(orderInfo);
-      Thread.sleep(1000);
+    GridTrading(BinanceExchange exchange, GridTradeConfig config) {
+      this.exchange = exchange;
+      this.symbol = config.getSymbol();
+      this.qtyUnit = config.getQtyUnit();
+      this.gridRate = new BigDecimal(config.getGridRate());
+      this.gridSize = config.getGridSize();
+      this.initPrice = config.getInitPrice();
     }
-  }
 
-  private void checkFilledBidOrder(OrderInfo orderInfo, int pricePrecision) {
-    NewOrderResponse firstBid = orderInfo.bidOrders.getFirst();
-    Order order = this.exchange.queryOrder(symbol, firstBid.getOrderId());
-    if (order.getStatus() == OrderStatus.FILLED && this.buys.get() < gridSize) {
-      log.info("Buy {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
-      orderInfo.removeBidOrdersHead();
-      buys.incrementAndGet();
+    public void execute() {
+      OrderInfo orderInfo = placeOrdersInGrid();
+      for (;;) {
+        try {
+          checkFilledOrder(orderInfo);
+        } catch (Exception e) {
+          log.error("Some exception happened during trading.", e);
+        }
+      }
+    }
 
-      //place new bid order to tail
-      NewOrderResponse bidOrdersTail = orderInfo.getBidOrdersTail();
-      BigDecimal bot = new BigDecimal(bidOrdersTail.getPrice());
-      BigDecimal newBid = bot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-      NewOrderResponse newBidOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
-      orderInfo.addBidOrder(newBidOrder);
+    private void checkFilledBidOrder(OrderInfo orderInfo, int pricePrecision) {
+      NewOrderResponse firstBid = orderInfo.bidOrders.getFirst();
+      Order order = this.exchange.queryOrder(symbol, firstBid.getOrderId());
+      if (order.getStatus() == OrderStatus.FILLED && this.buys.get() < gridSize) {
+        log.info("Buy {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
+        orderInfo.removeBidOrdersHead();
+        buys.incrementAndGet();
 
-      //cancel tail ask order and place new ask order to head
-      NewOrderResponse lastAsk = orderInfo.askOrders.getLast();
-      this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
-      //add new ask order based on existed lowest ask price(header) to the head
+        //place new bid order to tail
+        NewOrderResponse bidOrdersTail = orderInfo.getBidOrdersTail();
+        BigDecimal bot = new BigDecimal(bidOrdersTail.getPrice());
+        BigDecimal newBid = bot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+        NewOrderResponse newBidOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
+        orderInfo.addBidOrder(newBidOrder);
+
+        //cancel tail ask order and place new ask order to head
+        NewOrderResponse lastAsk = orderInfo.askOrders.getLast();
+        boolean success = this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
+        if (success) {
+          //add new ask order based on existed lowest ask price(header) to the head
+          NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
+          BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
+            .setScale(pricePrecision, RoundingMode.HALF_EVEN);
+          NewOrderResponse newOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+          orderInfo.addAskOrderToHead(newOrder);
+        }
+        log.info("Grid: {}", orderInfo);
+      }
+    }
+
+    private void checkFilledAskOrder(OrderInfo orderInfo, int pricePrecision) {
       NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
-      BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
-        .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-      NewOrderResponse newOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
-      orderInfo.addAskOrderToHead(newOrder);
-      log.info("Grid: {}", orderInfo);
-    }
-  }
+      Order order = this.exchange.queryOrder(symbol, firstAsk.getOrderId());
+      if (order.getStatus() == OrderStatus.FILLED && this.buys.get() > -gridSize) {
+        log.info("Sell {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
+        orderInfo.removeAskOrdersHead();
+        buys.decrementAndGet();
 
-  private void checkFilledAskOrder(OrderInfo orderInfo, int pricePrecision) {
-    NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
-    Order order = this.exchange.queryOrder(symbol, firstAsk.getOrderId());
-    if (order.getStatus() == OrderStatus.FILLED && this.buys.get() > -gridSize) {
-      log.info("Sell {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
-      orderInfo.removeAskOrdersHead();
-      buys.decrementAndGet();
+        //place new ask order to tail
+        NewOrderResponse askOrdersTail = orderInfo.getAskOrdersTail();
+        BigDecimal aot = new BigDecimal(askOrdersTail.getPrice());
+        BigDecimal newAsk = aot.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+        NewOrderResponse newAskOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
+        orderInfo.addAskOrder(newAskOrder);
 
-      //place new ask order to tail
-      NewOrderResponse askOrdersTail = orderInfo.getAskOrdersTail();
-      BigDecimal aot = new BigDecimal(askOrdersTail.getPrice());
-      BigDecimal newAsk = aot.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-      NewOrderResponse newAskOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
-      orderInfo.addAskOrder(newAskOrder);
-
-      //cancel tail bid order and place new bid order to head
-      NewOrderResponse lastBid = orderInfo.bidOrders.getLast();
-      this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
-      //add new bid order based on existed highest bid price(header) to the head
-      NewOrderResponse firstBid = orderInfo.getBidOrders().getFirst();
-      BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
-        .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-      NewOrderResponse newOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
-      orderInfo.addBidOrderToHead(newOrder);
-      log.info("Grid: {}", orderInfo);
-    }
-  }
-
-  private void checkFilledOrder(OrderInfo orderInfo) {
-    int pricePrecision = this.exchange.getPricePrecision(symbol);
-
-    //check buy orders
-    checkFilledBidOrder(orderInfo, pricePrecision);
-
-    //check sell orders
-    checkFilledAskOrder(orderInfo, pricePrecision);
-  }
-
-  private OrderInfo placeOrdersInGrid() {
-    int pricePrecision = this.exchange.getPricePrecision(symbol);
-    BigDecimal iPrice = new BigDecimal(initPrice).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-
-    OrderInfo orderInfo = new OrderInfo();
-    //place buy orders
-    BigDecimal p = new BigDecimal(iPrice.toPlainString());
-    for (int i = 0; i < gridSize; i ++) {
-      p = p.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-      NewOrderResponse order = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, p.toPlainString());
-      orderInfo.addBidOrder(order);
-    }
-    //place sell orders
-    p = new BigDecimal(iPrice.toPlainString());
-    for (int i = 0; i < gridSize; i ++) {
-      p = p.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-      NewOrderResponse order = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, p.toPlainString());
-      orderInfo.addAskOrder(order);
+        //cancel tail bid order and place new bid order to head
+        NewOrderResponse lastBid = orderInfo.bidOrders.getLast();
+        boolean success = this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
+        if (success) {
+          //add new bid order based on existed highest bid price(header) to the head
+          NewOrderResponse firstBid = orderInfo.getBidOrders().getFirst();
+          BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
+            .setScale(pricePrecision, RoundingMode.HALF_EVEN);
+          NewOrderResponse newOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+          orderInfo.addBidOrderToHead(newOrder);
+        }
+        log.info("Grid: {}", orderInfo);
+      }
     }
 
-    return orderInfo;
+    private void checkFilledOrder(OrderInfo orderInfo) {
+      int pricePrecision = this.exchange.getPricePrecision(symbol);
+
+      //check buy orders
+      checkFilledBidOrder(orderInfo, pricePrecision);
+
+      //check sell orders
+      checkFilledAskOrder(orderInfo, pricePrecision);
+    }
+
+    private OrderInfo placeOrdersInGrid() {
+      int pricePrecision = this.exchange.getPricePrecision(symbol);
+      BigDecimal iPrice = new BigDecimal(initPrice).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+
+      OrderInfo orderInfo = new OrderInfo();
+      //place buy orders
+      BigDecimal p = new BigDecimal(iPrice.toPlainString());
+      for (int i = 0; i < gridSize; i ++) {
+        p = p.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+        NewOrderResponse order = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, p.toPlainString());
+        orderInfo.addBidOrder(order);
+      }
+      //place sell orders
+      p = new BigDecimal(iPrice.toPlainString());
+      for (int i = 0; i < gridSize; i ++) {
+        p = p.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+        NewOrderResponse order = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, p.toPlainString());
+        orderInfo.addAskOrder(order);
+      }
+      log.info("Init order: {}", orderInfo);
+      return orderInfo;
+    }
+
   }
 
   @Data

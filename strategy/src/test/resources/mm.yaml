@@ -6,4 +6,4 @@ grids:
     qtyUnit: 1
     gridRate: 1.003
     gridSize: 3
-    initPrice: ?
+    initPrice: 0.001526
