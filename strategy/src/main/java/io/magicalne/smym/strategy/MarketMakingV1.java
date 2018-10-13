@@ -36,14 +36,29 @@ public class MarketMakingV1 {
     gridTradings = init(config);
   }
 
-  public void execute() {
+  public void execute() throws InterruptedException {
     log.info("Grid trading config: {}", gridTradings);
+    List<OrderInfo> orderInfos = new LinkedList<>();
     for (GridTrading gridTrading : gridTradings) {
       try {
-        gridTrading.execute();
+        OrderInfo orderInfo = gridTrading.placeOrdersInGrid();
+        orderInfos.add(orderInfo);
       } catch (BinanceApiException e) {
         log.error("Binance api exception: ", e);
       }
+    }
+
+    for (;;) {
+      for (int i = 0; i < gridTradings.size(); i ++) {
+        GridTrading gridTrading = gridTradings.get(i);
+        OrderInfo orderInfo = orderInfos.get(i);
+        try {
+          gridTrading.checkFilledOrder(orderInfo);
+        } catch (Exception e) {
+          log.error("Some exception happened during trading.", e);
+        }
+      }
+      Thread.sleep(1000);
     }
   }
   private List<GridTrading> init(MarketMakingConfig config) {
@@ -77,31 +92,22 @@ public class MarketMakingV1 {
       this.initPrice = config.getInitPrice();
     }
 
-    public void execute() {
-      OrderInfo orderInfo = placeOrdersInGrid();
-      for (;;) {
-        try {
-          checkFilledOrder(orderInfo);
-          Thread.sleep(1000);
-        } catch (Exception e) {
-          log.error("Some exception happened during trading.", e);
-        }
-      }
-    }
-
     private void checkFilledBidOrder(OrderInfo orderInfo, int pricePrecision) {
       NewOrderResponse firstBid = orderInfo.bidOrders.getFirst();
       Order order = this.exchange.queryOrder(symbol, firstBid.getOrderId());
       if (order.getStatus() == OrderStatus.FILLED && this.buys.get() < gridSize) {
-        log.info("Buy {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
+        log.info("Buy {} - {} - {}, order id: {}",
+          symbol, order.getPrice(), order.getExecutedQty(), order.getOrderId());
         orderInfo.removeBidOrdersHead();
         buys.incrementAndGet();
 
         //place new bid order to tail
         NewOrderResponse bidOrdersTail = orderInfo.getBidOrdersTail();
         BigDecimal bot = new BigDecimal(bidOrdersTail.getPrice());
-        BigDecimal newBid = bot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-        NewOrderResponse newBidOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
+        BigDecimal newBid = bot.divide(gridRate, RoundingMode.HALF_EVEN)
+          .setScale(pricePrecision, RoundingMode.HALF_EVEN);
+        NewOrderResponse newBidOrder =
+          this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
         orderInfo.addBidOrder(newBidOrder);
 
         //cancel tail ask order and place new ask order to head
@@ -112,7 +118,8 @@ public class MarketMakingV1 {
           NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
           BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
             .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          NewOrderResponse newOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+          NewOrderResponse newOrder =
+            this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
           orderInfo.addAskOrderToHead(newOrder);
         }
         log.info("Grid: {}", orderInfo);
@@ -123,15 +130,17 @@ public class MarketMakingV1 {
       NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
       Order order = this.exchange.queryOrder(symbol, firstAsk.getOrderId());
       if (order.getStatus() == OrderStatus.FILLED && this.buys.get() > -gridSize) {
-        log.info("Sell {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
+        log.info("Sell {} - {} - {}, order id: {}",
+          symbol, order.getPrice(), order.getExecutedQty(), order.getOrderId());
         orderInfo.removeAskOrdersHead();
         buys.decrementAndGet();
 
         //place new ask order to tail
         NewOrderResponse askOrdersTail = orderInfo.getAskOrdersTail();
         BigDecimal aot = new BigDecimal(askOrdersTail.getPrice());
-        BigDecimal newAsk = aot.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-        NewOrderResponse newAskOrder = this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
+        BigDecimal newAsk = aot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
+        NewOrderResponse newAskOrder =
+          this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
         orderInfo.addAskOrder(newAskOrder);
 
         //cancel tail bid order and place new bid order to head
@@ -140,9 +149,10 @@ public class MarketMakingV1 {
         if (success) {
           //add new bid order based on existed highest bid price(header) to the head
           NewOrderResponse firstBid = orderInfo.getBidOrders().getFirst();
-          BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
+          BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
             .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          NewOrderResponse newOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+          NewOrderResponse newOrder =
+            this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
           orderInfo.addBidOrderToHead(newOrder);
         }
         log.info("Grid: {}", orderInfo);
@@ -195,7 +205,7 @@ public class MarketMakingV1 {
     }
 
     void addBidOrder(NewOrderResponse order) {
-      this.bidOrders.add(order);
+      this.bidOrders.addLast(order);
     }
 
     void addBidOrderToHead(NewOrderResponse order) {
@@ -204,7 +214,7 @@ public class MarketMakingV1 {
     }
 
     void addAskOrder(NewOrderResponse order) {
-      this.askOrders.add(order);
+      this.askOrders.addLast(order);
     }
 
     void addAskOrderToHead(NewOrderResponse order) {
