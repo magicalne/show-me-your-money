@@ -46,10 +46,7 @@ public class MarketMakingV1 {
     }
   }
 
-  private void checkFilledOrder(OrderInfo orderInfo) {
-    int pricePrecision = this.exchange.getPricePrecision(symbol);
-
-    //check buy orders
+  private void checkFilledBidOrder(OrderInfo orderInfo, int pricePrecision) {
     NewOrderResponse firstBid = orderInfo.bidOrders.getFirst();
     Order order = this.exchange.queryOrder(symbol, firstBid.getOrderId());
     if (order.getStatus() == OrderStatus.FILLED && this.buys.get() < gridSize) {
@@ -66,7 +63,7 @@ public class MarketMakingV1 {
 
       //cancel tail ask order and place new ask order to head
       NewOrderResponse lastAsk = orderInfo.askOrders.getLast();
-      this.exchange.cancelOrder(symbol, lastAsk.getOrderId());
+      this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
       //add new ask order based on existed lowest ask price(header) to the head
       NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
       BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
@@ -75,10 +72,11 @@ public class MarketMakingV1 {
       orderInfo.addAskOrderToHead(newOrder);
       log.info("Grid: {}", orderInfo);
     }
+  }
 
-    //check sell orders
+  private void checkFilledAskOrder(OrderInfo orderInfo, int pricePrecision) {
     NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
-    order = this.exchange.queryOrder(symbol, firstAsk.getOrderId());
+    Order order = this.exchange.queryOrder(symbol, firstAsk.getOrderId());
     if (order.getStatus() == OrderStatus.FILLED && this.buys.get() > -gridSize) {
       log.info("Sell {} - {} - {}", symbol, order.getPrice(), order.getExecutedQty());
       orderInfo.removeAskOrdersHead();
@@ -93,15 +91,25 @@ public class MarketMakingV1 {
 
       //cancel tail bid order and place new bid order to head
       NewOrderResponse lastBid = orderInfo.bidOrders.getLast();
-      this.exchange.cancelOrder(symbol, lastBid.getOrderId());
+      this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
       //add new bid order based on existed highest bid price(header) to the head
-      firstBid = orderInfo.getBidOrders().getFirst();
+      NewOrderResponse firstBid = orderInfo.getBidOrders().getFirst();
       BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
         .setScale(pricePrecision, RoundingMode.HALF_EVEN);
       NewOrderResponse newOrder = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
       orderInfo.addBidOrderToHead(newOrder);
       log.info("Grid: {}", orderInfo);
     }
+  }
+
+  private void checkFilledOrder(OrderInfo orderInfo) {
+    int pricePrecision = this.exchange.getPricePrecision(symbol);
+
+    //check buy orders
+    checkFilledBidOrder(orderInfo, pricePrecision);
+
+    //check sell orders
+    checkFilledAskOrder(orderInfo, pricePrecision);
   }
 
   private OrderInfo placeOrdersInGrid() {

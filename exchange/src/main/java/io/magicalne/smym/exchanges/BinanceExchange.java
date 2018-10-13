@@ -18,6 +18,7 @@ import com.binance.api.client.domain.general.SymbolInfo;
 import com.binance.api.client.domain.market.CandlestickInterval;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
+import com.binance.api.client.exception.BinanceApiException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -115,6 +116,17 @@ public class BinanceExchange {
   public void cancelOrder(String symbol, long orderId) {
     CancelOrderRequest request = new CancelOrderRequest(symbol, orderId);
     this.restClient.cancelOrder(request);
+  }
+
+  public void tryCancelOrder(String symbol, long orderId) {
+    CancelOrderRequest request = new CancelOrderRequest(symbol, orderId);
+    try {
+      this.restClient.cancelOrder(request);
+    } catch(BinanceApiException e) {
+      Order order = queryOrder(symbol, orderId);
+      log.warn("Cannot cancel order: {}, {} due to {}", orderId, symbol, e);
+      log.warn("Query order status: {}", order.getStatus());
+    }
   }
 
   public void createLocalOrderBook(Set<String> symbols, int size) {
