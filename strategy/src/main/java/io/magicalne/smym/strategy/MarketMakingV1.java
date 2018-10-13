@@ -37,6 +37,7 @@ public class MarketMakingV1 {
   }
 
   public void execute() {
+    log.info("Grid trading config: {}", gridTradings);
     for (GridTrading gridTrading : gridTradings) {
       try {
         gridTrading.execute();
@@ -81,6 +82,7 @@ public class MarketMakingV1 {
       for (;;) {
         try {
           checkFilledOrder(orderInfo);
+          Thread.sleep(1000);
         } catch (Exception e) {
           log.error("Some exception happened during trading.", e);
         }
