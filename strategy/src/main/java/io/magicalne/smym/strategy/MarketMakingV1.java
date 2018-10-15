@@ -245,12 +245,10 @@ public class MarketMakingV1 {
     @Override
     public String toString() {
       return String.valueOf(value.getOrderId()) +
-        ": status" +
+        ": status: " +
         value.getStatus() +
-        ", price:" +
-        value.getPrice() +
-        "\n" +
-        next.toString();
+        ", price: " +
+        value.getPrice() + (next == null ? "" : ", " + next.toString());
     }
   }
 
