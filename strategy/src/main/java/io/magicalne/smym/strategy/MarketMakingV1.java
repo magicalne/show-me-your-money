@@ -110,11 +110,16 @@ public class MarketMakingV1 {
         BigDecimal bot = new BigDecimal(bidTail.getPrice());
         BigDecimal newBid = bot.divide(gridRate, RoundingMode.HALF_EVEN)
           .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-        NewOrderResponse newBidOrder =
-          this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
-        tail.next = new Node(newBidOrder);
-        //set bid head to next
-        this.bids = bids.next;
+        try {
+          NewOrderResponse newBidOrder =
+            this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
+          tail.next = new Node(newBidOrder);
+          //set bid head to next
+        } catch (BinanceApiException e) {
+          log.error("Cannot place order due to: ", e);
+        } finally {
+          this.bids = bids.next;
+        }
 
         //cancel tail ask order and place new ask order to head
         Node askTail = getTail(asks);
@@ -125,11 +130,15 @@ public class MarketMakingV1 {
           NewOrderResponse firstAsk = asks.getValue();
           BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
             .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          NewOrderResponse newOrder =
-            this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
-          Node newAsk = new Node(newOrder);
-          newAsk.next = asks;
-          asks = newAsk;
+          try {
+            NewOrderResponse newOrder =
+              this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+            Node newAsk = new Node(newOrder);
+            newAsk.next = asks;
+            asks = newAsk;
+          } catch (BinanceApiException e) {
+            log.error("Cannot place order due to: ", e);
+          }
         }
         log.info("{}, bids: {}", symbol, bids);
       }
@@ -152,10 +161,15 @@ public class MarketMakingV1 {
         NewOrderResponse askTail = tail.getValue();
         BigDecimal aot = new BigDecimal(askTail.getPrice());
         BigDecimal newAsk = aot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-        NewOrderResponse newAskOrder =
-          this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
-        tail.next = new Node(newAskOrder);
-        this.asks = asks.next;
+        try {
+          NewOrderResponse newAskOrder =
+            this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
+          tail.next = new Node(newAskOrder);
+        } catch (BinanceApiException e) {
+          log.error("Cannot place order due to: ", e);
+        } finally {
+          this.asks = asks.next;
+        }
 
         //cancel tail bid order and place new bid order to head
         Node bidTail = getTail(bids);
@@ -166,11 +180,15 @@ public class MarketMakingV1 {
           NewOrderResponse firstBid = bids.getValue();
           BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
             .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          NewOrderResponse newOrder =
-            this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
-          Node newBid = new Node(newOrder);
-          newBid.next = bids;
-          bids = newBid;
+          try {
+            NewOrderResponse newOrder =
+              this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+            Node newBid = new Node(newOrder);
+            newBid.next = bids;
+            bids = newBid;
+          } catch (BinanceApiException e) {
+            log.error("Cannot place order due to: ", e);
+          }
         }
         log.info("{}, asks: {}", symbol, asks);
       }
