@@ -115,6 +115,7 @@ public class MarketMakingV1 {
         NewOrderResponse lastAsk = orderInfo.askOrders.getLast();
         boolean success = this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
         if (success) {
+          orderInfo.removeAskOrdersTail();
           //add new ask order based on existed lowest ask price(header) to the head
           NewOrderResponse firstAsk = orderInfo.askOrders.getFirst();
           BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
@@ -148,6 +149,7 @@ public class MarketMakingV1 {
         NewOrderResponse lastBid = orderInfo.bidOrders.getLast();
         boolean success = this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
         if (success) {
+          orderInfo.removeBidOrdersTail();
           //add new bid order based on existed highest bid price(header) to the head
           NewOrderResponse firstBid = orderInfo.getBidOrders().getFirst();
           BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
@@ -155,6 +157,11 @@ public class MarketMakingV1 {
           NewOrderResponse newOrder =
             this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
           orderInfo.addBidOrderToHead(newOrder);
+        } else {
+          Order lastBidOrder = this.exchange.queryOrder(symbol, lastBid.getOrderId());
+          if (lastBidOrder.getStatus() == OrderStatus.FILLED && this.buys.get() < gridSize) {
+
+          }
         }
         log.info("Grid: {}", orderInfo);
       }
@@ -229,6 +236,14 @@ public class MarketMakingV1 {
 
     void removeAskOrdersHead() {
       this.askOrders.removeFirst();
+    }
+
+    void removeBidOrdersTail() {
+      this.bidOrders.removeLast();
+    }
+
+    void removeAskOrdersTail() {
+      this.askOrders.removeLast();
     }
 
     NewOrderResponse getBidOrdersTail() {
