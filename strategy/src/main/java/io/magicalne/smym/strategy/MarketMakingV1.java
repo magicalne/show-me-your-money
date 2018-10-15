@@ -71,6 +71,8 @@ public class MarketMakingV1 {
   }
 
   private static class GridTrading {
+    private static final double COMMISSION = 0.999;
+
     private final AtomicInteger buys = new AtomicInteger(0);
     private final BinanceExchange exchange;
     private final String symbol;
@@ -82,6 +84,7 @@ public class MarketMakingV1 {
     private Node bids;
     private Node asks;
     private int pricePrecision;
+    private int profit = 0;
 
     GridTrading(BinanceExchange exchange, GridTradeConfig config) {
       this.exchange = exchange;
@@ -97,8 +100,10 @@ public class MarketMakingV1 {
       Order order = this.exchange.queryOrder(symbol, bid.getOrderId());
       if (order.getStatus() == OrderStatus.FILLED && this.buys.get() < gridSize) {
         buys.incrementAndGet();
-        log.info("Buy {} - {} - {}, order id: {}",
-          symbol, order.getPrice(), order.getExecutedQty(), order.getOrderId());
+        double price = Double.parseDouble(order.getPrice());
+        double executedQty = Double.parseDouble(order.getExecutedQty());
+        profit -= price * executedQty * COMMISSION;
+        log.info("Buy {} - {} - {}, order id: {}, profit: {}", symbol, price, executedQty, order.getOrderId(), profit);
         //place new bid order to tail
         Node tail = getTail(bids);
         NewOrderResponse bidTail = tail.getValue();
@@ -126,7 +131,7 @@ public class MarketMakingV1 {
           newAsk.next = asks;
           asks = newAsk;
         }
-        log.info("{}, bids: ", symbol, bids);
+        log.info("{}, bids: {}", symbol, bids);
       }
       if (node.getNext() != null) {
         checkBidOrderFilled(node.getNext());
@@ -138,8 +143,10 @@ public class MarketMakingV1 {
       Order order = this.exchange.queryOrder(symbol, ask.getOrderId());
       if (order.getStatus() == OrderStatus.FILLED && this.buys.get() > -gridSize) {
         buys.decrementAndGet();
-        log.info("Sell {} - {} - {}, order id: {}",
-          symbol, order.getPrice(), order.getExecutedQty(), order.getOrderId());
+        double price = Double.parseDouble(order.getPrice());
+        double executedQty = Double.parseDouble(order.getExecutedQty());
+        profit += price * executedQty * COMMISSION;
+        log.info("Sell {} - {} - {}, order id: {}, profit: {}", symbol, price, executedQty, order.getOrderId(), profit);
         //place new ask order to tail
         Node tail = getTail(asks);
         NewOrderResponse askTail = tail.getValue();
