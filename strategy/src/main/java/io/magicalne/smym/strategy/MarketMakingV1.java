@@ -5,8 +5,6 @@ import com.binance.api.client.domain.TimeInForce;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.Order;
 import com.binance.api.client.exception.BinanceApiException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Preconditions;
 import io.magicalne.smym.dto.GridTradeConfig;
 import io.magicalne.smym.dto.MarketMakingConfig;
@@ -14,7 +12,6 @@ import io.magicalne.smym.exchanges.BinanceExchange;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -24,14 +21,14 @@ import java.util.stream.Collectors;
 
 
 @Slf4j
-public class MarketMakingV1 {
+public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
 
   private final BinanceExchange exchange;
   private final List<GridTrading> gridTradings;
 
   public MarketMakingV1(String accessId, String secretKey, String path) throws IOException {
     this.exchange = new BinanceExchange(accessId, secretKey);
-    MarketMakingConfig config = readYaml(path);
+    MarketMakingConfig config = readYaml(path, MarketMakingConfig.class);
     gridTradings = init(config);
   }
 
@@ -63,11 +60,6 @@ public class MarketMakingV1 {
     Preconditions.checkArgument(grids != null && !grids.isEmpty(), errMsg);
 
     return grids.stream().map(g -> new GridTrading(exchange, g)).collect(Collectors.toList());
-  }
-
-  private MarketMakingConfig readYaml(String path) throws IOException {
-    ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    return mapper.readValue(new File(path), MarketMakingConfig.class);
   }
 
   private static class GridTrading {
