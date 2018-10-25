@@ -103,35 +103,36 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
       double mp = Double.parseDouble(mobe.getPrice());
       OrderBookEntry lobe = exchange.getBestAsk(lastSymbol);
       double lp = Double.parseDouble(lobe.getPrice());
-      if (findArbitrage(sp, mp, lp)) {
-        log.info("Find arbitrage space.");
-        List<Callable<NewOrderResponse>> calls = new LinkedList<>();
-        BigDecimal sQty = new BigDecimal(startQty).setScale(startSymbolQtyPrecision, RoundingMode.HALF_EVEN);
-        BigDecimal spbd = new BigDecimal(sp).setScale(startSymbolPricePrecision, RoundingMode.HALF_EVEN);
-        calls.add(() ->
-          exchange.limitBuy(startSymbol, TimeInForce.GTC, sQty.toPlainString(), spbd.toPlainString()));
+      for (;;) {
+        if (findArbitrage(sp, mp, lp)) {
+          log.info("Find arbitrage space.");
+          List<Callable<NewOrderResponse>> calls = new LinkedList<>();
+          BigDecimal sQty = new BigDecimal(startQty).setScale(startSymbolQtyPrecision, RoundingMode.HALF_EVEN);
+          BigDecimal spbd = new BigDecimal(sp).setScale(startSymbolPricePrecision, RoundingMode.HALF_EVEN);
+          calls.add(() ->
+            exchange.limitBuy(startSymbol, TimeInForce.GTC, sQty.toPlainString(), spbd.toPlainString()));
 
-        BigDecimal mpbd = new BigDecimal(mp).setScale(middleSymbolPricePrecision, RoundingMode.HALF_EVEN);
-        BigDecimal mQty = sQty.divide(mpbd, middleSymbolQtyPrecision, RoundingMode.HALF_EVEN);
-        calls.add(() ->
-          exchange.limitBuy(middleSymbol, TimeInForce.GTC, mQty.toPlainString(), mpbd.toPlainString()));
+          BigDecimal mpbd = new BigDecimal(mp).setScale(middleSymbolPricePrecision, RoundingMode.HALF_EVEN);
+          BigDecimal mQty = sQty.divide(mpbd, middleSymbolQtyPrecision, RoundingMode.HALF_EVEN);
+          calls.add(() ->
+            exchange.limitBuy(middleSymbol, TimeInForce.GTC, mQty.toPlainString(), mpbd.toPlainString()));
 
-        BigDecimal lpbd = new BigDecimal(lp).setScale(lastSymbolPricePrecision, RoundingMode.HALF_EVEN);
-        calls.add(() ->
-          exchange.limitSell(lastSymbol, TimeInForce.GTC, mQty.toPlainString(), lpbd.toPlainString()));
+          BigDecimal lpbd = new BigDecimal(lp).setScale(lastSymbolPricePrecision, RoundingMode.HALF_EVEN);
+          calls.add(() ->
+            exchange.limitSell(lastSymbol, TimeInForce.GTC, mQty.toPlainString(), lpbd.toPlainString()));
 
-        List<Future<NewOrderResponse>> futures = executorService.invokeAll(calls);
-        List<NewOrderResponse> orderIdList = new LinkedList<>();
-        log.info("Placing orders...");
-        for (Future<NewOrderResponse> f : futures) {
-          NewOrderResponse res = f.get();
-          log.info("Place order: {} - {} - {}, {}",
-            res.getSymbol(), res.getOrderId(), res.getStatus(), res.getTransactTime());
-          orderIdList.add(res);
+          List<Future<NewOrderResponse>> futures = executorService.invokeAll(calls);
+          List<NewOrderResponse> orderIdList = new LinkedList<>();
+          log.info("Placing orders...");
+          for (Future<NewOrderResponse> f : futures) {
+            NewOrderResponse res = f.get();
+            log.info("Place order: {} - {} - {}, {}",
+              res.getSymbol(), res.getOrderId(), res.getStatus(), res.getTransactTime());
+            orderIdList.add(res);
+          }
+          this.orders = orderIdList;
+          return;
         }
-        this.orders = orderIdList;
-      } else {
-        placeOrders();
       }
     }
 
