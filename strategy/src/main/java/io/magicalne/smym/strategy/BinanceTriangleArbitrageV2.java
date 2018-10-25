@@ -1,5 +1,9 @@
 package io.magicalne.smym.strategy;
 
+import com.binance.api.client.domain.OrderStatus;
+import com.binance.api.client.domain.TimeInForce;
+import com.binance.api.client.domain.account.NewOrderResponse;
+import com.binance.api.client.domain.account.Order;
 import com.binance.api.client.domain.market.OrderBookEntry;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -9,23 +13,28 @@ import io.magicalne.smym.exchanges.BinanceExchange;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig> {
 
   private final BinanceExchange exchange;
 
-  public BinanceTriangleArbitrageV2(String accessId, String secretKey, String path) throws IOException {
+  public BinanceTriangleArbitrageV2(String accessId, String secretKey, String path)
+    throws IOException, InterruptedException {
     this.exchange = new BinanceExchange(accessId, secretKey);
     TriangleArbitrageConfig config = readYaml(path, TriangleArbitrageConfig.class);
     init(config);
   }
 
-  private void init(TriangleArbitrageConfig config) {
+  private void init(TriangleArbitrageConfig config) throws InterruptedException {
     List<Executor> executors = new LinkedList<>();
     for (Triangle triangle : config.getTriangles()) {
       Executor executor = new Executor(triangle, exchange);
@@ -34,8 +43,13 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
 
     for (;;) {
       for (Executor executor : executors) {
-        executor.check();
+        try {
+          executor.checkOrderStatus();
+        } catch (ExecutionException | InterruptedException e) {
+          log.error("Something bad happened...", e);
+        }
       }
+      Thread.sleep(1000);
     }
   }
 
@@ -44,7 +58,7 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
     private final BinanceExchange exchange;
     private static final double COMMSSION = Math.pow(0.999, 3);
     private final double priceRate;
-    private final String startBaseQty;
+    private final String startQty;
     private final String startSymbol;
     private final String middleSymbol;
     private final String lastSymbol;
@@ -56,9 +70,13 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
     private final int lastSymbolQtyPrecision;
     private final ExecutorService executorService;
 
+    private final AtomicInteger cnt = new AtomicInteger(0);
+
+    private List<NewOrderResponse> orders = null;
+
     private Executor(Triangle triangle, BinanceExchange exchange) {
       this.priceRate = triangle.getPriceRate();
-      this.startBaseQty = triangle.getStartBaseQty();
+      this.startQty = triangle.getStartQty();
       this.startSymbol = triangle.getStartSymbol();
       this.middleSymbol = triangle.getMiddleSymbol();
       this.lastSymbol = triangle.getLastSymbol();
@@ -77,7 +95,8 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
         Executors.newFixedThreadPool(3, new ThreadFactoryBuilder().setNameFormat("TA-thread-%d").build());
     }
 
-    private void placeOrders() {
+    private void placeOrders() throws InterruptedException, ExecutionException {
+      cnt.set(0);
       OrderBookEntry sobe = exchange.getBestBid(startSymbol);
       double sp = Double.parseDouble(sobe.getPrice()) / priceRate;
       OrderBookEntry mobe = exchange.getBestBid(middleSymbol);
@@ -86,15 +105,87 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
       double lp = Double.parseDouble(lobe.getPrice()) * priceRate;
       if (findArbitrage(sp, mp, lp)) {
         log.info("Find arbitrage space.");
-        executorService.
+        List<Callable<NewOrderResponse>> calls = new LinkedList<>();
+        BigDecimal sQty = new BigDecimal(startQty, new MathContext(startSymbolQtyPrecision, RoundingMode.HALF_EVEN));
+        BigDecimal spbd = new BigDecimal(sp, new MathContext(startSymbolPricePrecision, RoundingMode.HALF_EVEN));
+        calls.add(() ->
+          exchange.limitBuy(startSymbol, TimeInForce.GTC, sQty.toPlainString(), spbd.toPlainString()));
 
+        BigDecimal mpbd = new BigDecimal(mp, new MathContext(middleSymbolPricePrecision, RoundingMode.HALF_EVEN));
+        BigDecimal mQty = sQty.divide(mpbd, middleSymbolQtyPrecision, RoundingMode.HALF_EVEN);
+        calls.add(() ->
+          exchange.limitBuy(middleSymbol, TimeInForce.GTC, mQty.toPlainString(), mpbd.toPlainString()));
+
+        BigDecimal lpbd = new BigDecimal(lp, new MathContext(lastSymbolPricePrecision, RoundingMode.HALF_EVEN));
+        calls.add(() ->
+          exchange.limitSell(lastSymbol, TimeInForce.GTC, mQty.toPlainString(), lpbd.toPlainString()));
+
+        List<Future<NewOrderResponse>> futures = executorService.invokeAll(calls);
+        List<NewOrderResponse> orderIdList = new LinkedList<>();
+        log.info("Placing orders...");
+        for (Future<NewOrderResponse> f : futures) {
+          NewOrderResponse res = f.get();
+          log.info("Place order: {} - {} - {}, {}",
+            res.getSymbol(), res.getOrderId(), res.getStatus(), res.getTransactTime());
+          orderIdList.add(res);
+        }
+        this.orders = orderIdList;
       } else {
         placeOrders();
       }
     }
 
+    private void checkOrderStatus() throws ExecutionException, InterruptedException {
+      if (this.orders == null || this.orders.isEmpty()) {
+        placeOrders();
+      } else {
+        List<Order> queryOrders = new LinkedList<>();
+        int filled = 0;
+        int submitted = 0;
+        for (NewOrderResponse res : orders) {
+          Order order = this.exchange.queryOrder(res.getSymbol(), res.getOrderId());
+          if (order.getStatus() == OrderStatus.FILLED) {
+            log.info("{} was filled.", order.getSymbol());
+            filled ++;
+          } else if (order.getStatus() == OrderStatus.NEW) {
+            submitted ++;
+          } else if (order.getStatus() == OrderStatus.PARTIALLY_FILLED) {
+            log.info("{} was partially filled.", order.getSymbol());
+          }
+          queryOrders.add(order);
+        }
+        if (filled == 3) {
+          log.info("All were filled!!! Show me your money, baby!!!");
+          calculateProfit(queryOrders);
+          placeOrders();
+        }
+
+        if (submitted == 3) {
+          log.info("No filled order yet.");
+          cnt.incrementAndGet();
+          if (cnt.get() == 10) {
+            cancelOrders(queryOrders);
+            placeOrders();
+          }
+        }
+      }
+    }
+
+    private void cancelOrders(List<Order> queryOrders) {
+      queryOrders.forEach(o -> this.exchange.cancelOrder(o.getSymbol(), o.getOrderId()));
+      log.info("Cancel old orders");
+    }
+
+    private void calculateProfit(List<Order> queryOrders) {
+      Order lastOrder = queryOrders.get(2);
+      String executedQty = lastOrder.getExecutedQty();
+      double qty = Double.parseDouble(executedQty);
+      log.info("Profit from {} -> {} -> {} is {}",
+        startSymbol, middleSymbol, lastSymbol, qty - Double.parseDouble(startQty));
+    }
+
     private boolean findArbitrage(double sp, double mp, double lp) {
-      return lp/sp*sp*COMMSSION > priceRate;
+      return lp/mp*sp*COMMSSION > priceRate;
     }
   }
 }

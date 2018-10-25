@@ -2,8 +2,9 @@
 ---
 version: v1
 grids:
-  - symbol: BNBBTC
-    qtyUnit: 1
+  - symbol: BTCUSDT
+    qtyUnit: 0.002
     gridRate: 1.003
     gridSize: 3
-    initPrice: 0.001526
+    initPrice: 6785
+

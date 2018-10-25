@@ -1,0 +1,9 @@
+# triangule arbitrage
+---
+triangles:
+  - startQty: 0.0016
+    priceRate: 0.0001
+    startSymbol: BTCUSDT
+    middleSymbol: BNBBTC
+    lastSymbol: BNBUSDT
+
