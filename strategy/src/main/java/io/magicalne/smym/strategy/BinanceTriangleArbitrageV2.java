@@ -14,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -45,8 +44,9 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
       for (Executor executor : executors) {
         try {
           executor.checkOrderStatus();
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (InterruptedException | ExecutionException e) {
           log.error("Something bad happened...", e);
+          return;
         }
       }
       Thread.sleep(1000);
@@ -106,17 +106,18 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
       if (findArbitrage(sp, mp, lp)) {
         log.info("Find arbitrage space.");
         List<Callable<NewOrderResponse>> calls = new LinkedList<>();
-        BigDecimal sQty = new BigDecimal(startQty, new MathContext(startSymbolQtyPrecision, RoundingMode.HALF_EVEN));
-        BigDecimal spbd = new BigDecimal(sp, new MathContext(startSymbolPricePrecision, RoundingMode.HALF_EVEN));
+        BigDecimal sQty = new BigDecimal(startQty).setScale(startSymbolQtyPrecision, RoundingMode.HALF_EVEN);
+        BigDecimal spbd = new BigDecimal(sp).setScale(startSymbolPricePrecision, RoundingMode.HALF_EVEN);
         calls.add(() ->
           exchange.limitBuy(startSymbol, TimeInForce.GTC, sQty.toPlainString(), spbd.toPlainString()));
 
-        BigDecimal mpbd = new BigDecimal(mp, new MathContext(middleSymbolPricePrecision, RoundingMode.HALF_EVEN));
+        BigDecimal mpbd = new BigDecimal(mp).setScale(middleSymbolPricePrecision, RoundingMode.HALF_EVEN);
         BigDecimal mQty = sQty.divide(mpbd, middleSymbolQtyPrecision, RoundingMode.HALF_EVEN);
         calls.add(() ->
           exchange.limitBuy(middleSymbol, TimeInForce.GTC, mQty.toPlainString(), mpbd.toPlainString()));
 
-        BigDecimal lpbd = new BigDecimal(lp, new MathContext(lastSymbolPricePrecision, RoundingMode.HALF_EVEN));
+        BigDecimal lpbd = new BigDecimal(lp).setScale(lastSymbolPricePrecision, RoundingMode.HALF_EVEN);
+        log.info("last sell price {} and qty: {}", lpbd.toPlainString(), mQty.toPlainString());
         calls.add(() ->
           exchange.limitSell(lastSymbol, TimeInForce.GTC, mQty.toPlainString(), lpbd.toPlainString()));
 
@@ -177,11 +178,17 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
     }
 
     private void calculateProfit(List<Order> queryOrders) {
+      Order startOrder = queryOrders.get(0);
+      double sp = Double.parseDouble(startOrder.getPrice());
+      double sq = Double.parseDouble(startOrder.getExecutedQty());
+      double sBase = sp * sq;
+
       Order lastOrder = queryOrders.get(2);
-      String executedQty = lastOrder.getExecutedQty();
-      double qty = Double.parseDouble(executedQty);
+      double lp = Double.parseDouble(lastOrder.getPrice());
+      double lq = Double.parseDouble(lastOrder.getExecutedQty());
+      double lBase = lp * lq;
       log.info("Profit from {} -> {} -> {} is {}",
-        startSymbol, middleSymbol, lastSymbol, qty - Double.parseDouble(startQty));
+        startSymbol, middleSymbol, lastSymbol, lBase - sBase);
     }
 
     private boolean findArbitrage(double sp, double mp, double lp) {
