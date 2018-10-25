@@ -163,7 +163,7 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
         if (submitted == 3) {
           log.info("No filled order yet.");
           cnt.incrementAndGet();
-          if (cnt.get() == 2) {
+          if (cnt.get() == 1) {
             cancelOrders(queryOrders);
             placeOrders();
           }
@@ -191,7 +191,7 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
     }
 
     private boolean findArbitrage(double sp, double mp, double lp) {
-      return lp/mp*sp*COMMSSION > priceRate;
+      return lp*COMMSSION/mp/sp > priceRate;
     }
   }
 }
