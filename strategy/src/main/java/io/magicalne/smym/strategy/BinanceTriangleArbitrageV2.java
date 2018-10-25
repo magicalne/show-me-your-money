@@ -49,7 +49,7 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
           return;
         }
       }
-      Thread.sleep(1000);
+      Thread.sleep(10000);
     }
   }
 
