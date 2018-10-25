@@ -98,11 +98,11 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
     private void placeOrders() throws InterruptedException, ExecutionException {
       cnt.set(0);
       OrderBookEntry sobe = exchange.getBestBid(startSymbol);
-      double sp = Double.parseDouble(sobe.getPrice()) / priceRate;
+      double sp = Double.parseDouble(sobe.getPrice());
       OrderBookEntry mobe = exchange.getBestBid(middleSymbol);
-      double mp = Double.parseDouble(mobe.getPrice()) / priceRate;
+      double mp = Double.parseDouble(mobe.getPrice());
       OrderBookEntry lobe = exchange.getBestAsk(lastSymbol);
-      double lp = Double.parseDouble(lobe.getPrice()) * priceRate;
+      double lp = Double.parseDouble(lobe.getPrice());
       if (findArbitrage(sp, mp, lp)) {
         log.info("Find arbitrage space.");
         List<Callable<NewOrderResponse>> calls = new LinkedList<>();
@@ -117,7 +117,6 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
           exchange.limitBuy(middleSymbol, TimeInForce.GTC, mQty.toPlainString(), mpbd.toPlainString()));
 
         BigDecimal lpbd = new BigDecimal(lp).setScale(lastSymbolPricePrecision, RoundingMode.HALF_EVEN);
-        log.info("last sell price {} and qty: {}", lpbd.toPlainString(), mQty.toPlainString());
         calls.add(() ->
           exchange.limitSell(lastSymbol, TimeInForce.GTC, mQty.toPlainString(), lpbd.toPlainString()));
 
