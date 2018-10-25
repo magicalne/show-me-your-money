@@ -163,7 +163,7 @@ public class BinanceTriangleArbitrageV2 extends Strategy<TriangleArbitrageConfig
         if (submitted == 3) {
           log.info("No filled order yet.");
           cnt.incrementAndGet();
-          if (cnt.get() == 10) {
+          if (cnt.get() == 2) {
             cancelOrders(queryOrders);
             placeOrders();
           }
