@@ -131,9 +131,9 @@ public class BinanceExchange {
     }
   }
 
-  public void createLocalOrderBook(Set<String> symbols, int size) {
+  public void createLocalOrderBook(Set<String> symbols, int depth) {
     this.orderBookMap = new ConcurrentHashMap<>(symbols.size() / 3 * 4);
-    this.orderBookSize = size;
+    this.orderBookSize = depth;
     BinanceApiCallback<DepthEvent> callback = new UniverseApiCallback<DepthEvent>() {
       @Override
       public void onResponse(DepthEvent event) {
@@ -141,7 +141,7 @@ public class BinanceExchange {
       }
     };
     for (String symbol : symbols) {
-      OrderBook orderBook = this.restClient.getOrderBook(symbol, size);
+      OrderBook orderBook = this.restClient.getOrderBook(symbol, depth);
       this.orderBookMap.put(symbol, orderBook);
       this.wsClient.onDepthEvent(symbol.toLowerCase(), callback);
     }
@@ -245,6 +245,18 @@ public class BinanceExchange {
       }
     }
     return null;
+  }
+
+  public double getMidPriceFromOrderBook(String symbol) {
+    OrderBookEntry bestAsk = getBestAsk(symbol);
+    OrderBookEntry bestBid = getBestBid(symbol);
+    if (bestAsk == null || bestBid == null) {
+      return -1d;
+    } else {
+      double ask = Double.parseDouble(bestAsk.getPrice());
+      double bid = Double.parseDouble(bestBid.getPrice());
+      return (ask + bid) / 2;
+    }
   }
 
   public int getQtyPrecision(String symbol) {

@@ -6,5 +6,7 @@ grids:
     qtyUnit: 0.002
     gridRate: 1.003
     gridSize: 3
-    initPrice: 6785
-
+  - symbol: BNBUSDT
+    qtyUnit: 1
+    gridRate: 1.003
+    gridSize: 3
