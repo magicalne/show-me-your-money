@@ -99,7 +99,7 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         profit -= price * executedQty * COMMISSION;
         log.info("Buy {} - {} - {}, order id: {}, profit: {}", symbol, price, executedQty, order.getOrderId(), profit);
         //place new bid order to tail
-        if (this.buys.get() < gridSize) {
+        if (this.buys.get() <= 1) {
           NewOrderResponse bidTail = bids.getLast();
           BigDecimal bot = new BigDecimal(bidTail.getPrice());
           BigDecimal newBid = bot.divide(gridRate, RoundingMode.HALF_EVEN)
@@ -114,19 +114,22 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         }
 
         //cancel tail ask order and place new ask order to head
-        boolean success = this.exchange.tryCancelOrder(symbol, asks.getLast().getOrderId());
-        if (success) {
-          asks.removeLast();
-          //add new ask order based on existed lowest ask price(header) to the head
-          NewOrderResponse firstAsk = asks.getFirst();
-          BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
-            .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          try {
-            NewOrderResponse newOrder =
-              this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
-            asks.addFirst(newOrder);
-          } catch (BinanceApiException e) {
-            log.error("Cannot place ask order due to: ", e);
+        if (!asks.isEmpty()) {
+          NewOrderResponse lastAsk = asks.pollLast();
+          boolean success = this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
+          if (success) {
+            asks.removeLast();
+            //add new ask order based on existed lowest ask price(header) to the head
+            NewOrderResponse firstAsk = asks.getFirst();
+            BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
+              .setScale(pricePrecision, RoundingMode.HALF_EVEN);
+            try {
+              NewOrderResponse newOrder =
+                this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+              asks.addFirst(newOrder);
+            } catch (BinanceApiException e) {
+              log.error("Cannot place ask order due to: ", e);
+            }
           }
         }
         logBidsInfo();
@@ -143,7 +146,7 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         double executedQty = Double.parseDouble(order.getExecutedQty());
         profit += price * executedQty * COMMISSION;
         log.info("Sell {} - {} - {}, order id: {}, profit: {}", symbol, price, executedQty, order.getOrderId(), profit);
-        if (this.buys.get() > -gridSize) {
+        if (this.buys.get() >= -1) {
           //place new ask order to tail
           NewOrderResponse askTail = asks.getLast();
           BigDecimal aot = new BigDecimal(askTail.getPrice());
@@ -158,19 +161,21 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         }
 
         //cancel tail bid order and place new bid order to head
-        boolean success = this.exchange.tryCancelOrder(symbol, bids.getLast().getOrderId());
-        if (success) {
-          bids.removeLast();
-          //add new bid order based on existed highest bid price(header) to the head
-          NewOrderResponse firstBid = bids.getFirst();
-          BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
-            .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          try {
-            NewOrderResponse newOrder =
-              this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
-            bids.addFirst(newOrder);
-          } catch (BinanceApiException e) {
-            log.error("Cannot place order due to: ", e);
+        if (!bids.isEmpty()) {
+          NewOrderResponse lastBid = bids.pollLast();
+          boolean success = this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
+          if (success) {
+            //add new bid order based on existed highest bid price(header) to the head
+            NewOrderResponse firstBid = bids.getFirst();
+            BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
+              .setScale(pricePrecision, RoundingMode.HALF_EVEN);
+            try {
+              NewOrderResponse newOrder =
+                this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newPrice.toPlainString());
+              bids.addFirst(newOrder);
+            } catch (BinanceApiException e) {
+              log.error("Cannot place order due to: ", e);
+            }
           }
         }
         logAsksInfo();
