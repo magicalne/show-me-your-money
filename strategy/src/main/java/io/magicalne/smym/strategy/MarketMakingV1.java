@@ -117,7 +117,7 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         if (!asks.isEmpty()) {
           NewOrderResponse lastAsk = asks.pollLast();
           boolean success = this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
-          if (success) {
+          if (success && !asks.isEmpty()) {
             asks.removeLast();
             //add new ask order based on existed lowest ask price(header) to the head
             NewOrderResponse firstAsk = asks.getFirst();
@@ -164,7 +164,7 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         if (!bids.isEmpty()) {
           NewOrderResponse lastBid = bids.pollLast();
           boolean success = this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
-          if (success) {
+          if (success && !bids.isEmpty()) {
             //add new bid order based on existed highest bid price(header) to the head
             NewOrderResponse firstBid = bids.getFirst();
             BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
