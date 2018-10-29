@@ -103,10 +103,14 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         if (!asks.isEmpty()) {
           NewOrderResponse lastAsk = asks.pollLast();
           boolean success = this.exchange.tryCancelOrder(symbol, lastAsk.getOrderId());
-          if (success && !asks.isEmpty()) {
-            asks.removeLast();
+          if (success) {
+            NewOrderResponse firstAsk;
+            if (asks.isEmpty()) {
+              firstAsk = lastAsk;
+            } else {
+              firstAsk = asks.getFirst();
+            }
             //add new ask order based on existed lowest ask price(header) to the head
-            NewOrderResponse firstAsk = asks.getFirst();
             BigDecimal newPrice = new BigDecimal(firstAsk.getPrice()).divide(gridRate, RoundingMode.HALF_EVEN)
               .setScale(pricePrecision, RoundingMode.HALF_EVEN);
             try {
@@ -137,9 +141,14 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         if (!bids.isEmpty()) {
           NewOrderResponse lastBid = bids.pollLast();
           boolean success = this.exchange.tryCancelOrder(symbol, lastBid.getOrderId());
-          if (success && !bids.isEmpty()) {
-            //add new bid order based on existed highest bid price(header) to the head
-            NewOrderResponse firstBid = bids.getFirst();
+          if (success) {
+            NewOrderResponse firstBid;
+            if (bids.isEmpty()) {
+              firstBid = lastBid;
+            } else {
+              //add new bid order based on existed highest bid price(header) to the head
+              firstBid = bids.getFirst();
+            }
             BigDecimal newPrice = new BigDecimal(firstBid.getPrice()).multiply(gridRate)
               .setScale(pricePrecision, RoundingMode.HALF_EVEN);
             try {
