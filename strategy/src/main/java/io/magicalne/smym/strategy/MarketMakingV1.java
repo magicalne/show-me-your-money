@@ -98,20 +98,6 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         double executedQty = Double.parseDouble(order.getExecutedQty());
         profit -= price * executedQty * COMMISSION;
         log.info("Buy {} - {} - {}, order id: {}, profit: {}", symbol, price, executedQty, order.getOrderId(), profit);
-        //place new bid order to tail
-        if (this.buys.get() <= 1) {
-          NewOrderResponse bidTail = bids.getLast();
-          BigDecimal bot = new BigDecimal(bidTail.getPrice());
-          BigDecimal newBid = bot.divide(gridRate, RoundingMode.HALF_EVEN)
-            .setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          try {
-            NewOrderResponse newBidOrder =
-              this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, newBid.toPlainString());
-            bids.addLast(newBidOrder);
-          } catch (BinanceApiException e) {
-            log.error("Cannot place bid order due to: ", e);
-          }
-        }
 
         //cancel tail ask order and place new ask order to head
         if (!asks.isEmpty()) {
@@ -146,19 +132,6 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         double executedQty = Double.parseDouble(order.getExecutedQty());
         profit += price * executedQty * COMMISSION;
         log.info("Sell {} - {} - {}, order id: {}, profit: {}", symbol, price, executedQty, order.getOrderId(), profit);
-        if (this.buys.get() >= -1) {
-          //place new ask order to tail
-          NewOrderResponse askTail = asks.getLast();
-          BigDecimal aot = new BigDecimal(askTail.getPrice());
-          BigDecimal newAsk = aot.multiply(gridRate).setScale(pricePrecision, RoundingMode.HALF_EVEN);
-          try {
-            NewOrderResponse newAskOrder =
-              this.exchange.limitSell(symbol, TimeInForce.GTC, qtyUnit, newAsk.toPlainString());
-            asks.addLast(newAskOrder);
-          } catch (BinanceApiException e) {
-            log.error("Cannot place ask order due to: ", e);
-          }
-        }
 
         //cancel tail bid order and place new bid order to head
         if (!bids.isEmpty()) {
