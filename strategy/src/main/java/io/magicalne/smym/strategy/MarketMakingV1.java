@@ -77,7 +77,7 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
 
     private final LinkedList<NewOrderResponse> bids = new LinkedList<>();
     private final LinkedList<NewOrderResponse> asks = new LinkedList<>();
-    private int profit = 0;
+    private double profit = 0d;
 
     GridTrading(BinanceExchange exchange, GridTradeConfig config) {
       this.exchange = exchange;
