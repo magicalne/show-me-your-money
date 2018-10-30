@@ -252,7 +252,9 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
             this.exchange.tryCancelOrder(symbol, orderId);
           }
           AssetBalance balance = this.exchange.getBalance(symbol);
-          NewOrderResponse marketSell = this.exchange.marketSell(symbol, balance.getFree());
+          int qtyPrecision = this.exchange.getQtyPrecision(symbol);
+          BigDecimal qty = new BigDecimal(balance.getFree()).setScale(qtyPrecision, RoundingMode.HALF_EVEN);
+          NewOrderResponse marketSell = this.exchange.marketSell(symbol, qty.toPlainString());
           log.info("STOP LOSS: {} with {}", symbol, stopLoss);
           profit -= Double.parseDouble(marketSell.getExecutedQty());
           log.info("Profit left: {}", profit);
