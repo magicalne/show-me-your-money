@@ -2,10 +2,7 @@ package io.magicalne.smym.exchanges;
 
 import com.binance.api.client.*;
 import com.binance.api.client.domain.TimeInForce;
-import com.binance.api.client.domain.account.Account;
-import com.binance.api.client.domain.account.NewOrder;
-import com.binance.api.client.domain.account.NewOrderResponse;
-import com.binance.api.client.domain.account.Order;
+import com.binance.api.client.domain.account.*;
 import com.binance.api.client.domain.account.request.AllOrdersRequest;
 import com.binance.api.client.domain.account.request.CancelOrderRequest;
 import com.binance.api.client.domain.account.request.OrderStatusRequest;
@@ -225,6 +222,11 @@ public class BinanceExchange {
     return this.exchangeInfo;
   }
 
+  public ExchangeInfo getRecentExchangeInfo() {
+    this.exchangeInfo = this.restClient.getExchangeInfo();
+    return exchangeInfo;
+  }
+
   public OrderBookEntry getBestAsk(String symbol) {
     OrderBook orderBook = this.orderBookMap.get(symbol);
     if (orderBook != null) {
@@ -273,5 +275,10 @@ public class BinanceExchange {
     String tickSize = priceFilter.getTickSize();
     int index = tickSize.indexOf("1");
     return index == 0 ? index : index - 1;
+  }
+
+  public AssetBalance getBalance(String symbol) {
+    Account account = restClient.getAccount();
+    return account.getAssetBalance(symbol);
   }
 }

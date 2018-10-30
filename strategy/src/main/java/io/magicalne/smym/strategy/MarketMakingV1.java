@@ -2,8 +2,10 @@ package io.magicalne.smym.strategy;
 
 import com.binance.api.client.domain.OrderStatus;
 import com.binance.api.client.domain.TimeInForce;
+import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.Order;
+import com.binance.api.client.domain.market.OrderBookEntry;
 import com.binance.api.client.exception.BinanceApiException;
 import com.google.common.base.Preconditions;
 import io.magicalne.smym.dto.GridTradeConfig;
@@ -77,7 +79,10 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
 
     private final LinkedList<NewOrderResponse> bids = new LinkedList<>();
     private final LinkedList<NewOrderResponse> asks = new LinkedList<>();
+    private final double stopLoss;
     private double profit = 0d;
+
+    private boolean stopTrading = false;
 
     GridTrading(BinanceExchange exchange, GridTradeConfig config) {
       this.exchange = exchange;
@@ -85,6 +90,7 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
       this.qtyUnit = config.getQtyUnit();
       this.gridRate = new BigDecimal(config.getGridRate());
       this.gridSize = config.getGridSize();
+      this.stopLoss = config.getStopLoss();
       this.pricePrecision = this.exchange.getPricePrecision(symbol);
     }
 
@@ -174,10 +180,15 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         if (!asks.isEmpty()) {
           checkAskOrderFilled();
         }
+        stopLoss();
       }
     }
 
     private void placeOrdersInGrid() {
+      if (stopTrading) {
+        log.info("Stop trading for {}", symbol);
+        return;
+      }
       log.info("Placing orders for {}", symbol);
       double mp = this.exchange.getMidPriceFromOrderBook(symbol);
       if (mp < 0) {
@@ -224,6 +235,28 @@ public class MarketMakingV1 extends Strategy<MarketMakingConfig> {
         p = p.divide(gridRate, RoundingMode.HALF_EVEN).setScale(pricePrecision, RoundingMode.HALF_EVEN);
         order = this.exchange.limitBuy(symbol, TimeInForce.GTC, qtyUnit, p.toPlainString());
         bids.add(order);
+      }
+    }
+
+    private void stopLoss() {
+      if (bids.isEmpty() && !asks.isEmpty()) {
+        NewOrderResponse firstAsk = asks.getFirst();
+        double fap = Double.parseDouble(firstAsk.getPrice());
+        OrderBookEntry bestAsk = this.exchange.getBestAsk(symbol);
+        double bap = Double.parseDouble(bestAsk.getPrice());
+        if ((fap-bap)/bap >= stopLoss) {
+          stopTrading = true;
+          //Cancel all and sell all.
+          for (NewOrderResponse bid : bids) {
+            Long orderId = bid.getOrderId();
+            this.exchange.tryCancelOrder(symbol, orderId);
+          }
+          AssetBalance balance = this.exchange.getBalance(symbol);
+          NewOrderResponse marketSell = this.exchange.marketSell(symbol, balance.getFree());
+          log.info("STOP LOSS: {} with {}", symbol, stopLoss);
+          profit -= Double.parseDouble(marketSell.getExecutedQty());
+          log.info("Profit left: {}", profit);
+        }
       }
     }
   }

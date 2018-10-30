@@ -8,4 +8,5 @@ public class GridTradeConfig {
   private String qtyUnit;
   private String gridRate;
   private int gridSize;
+  private double stopLoss;
 }
