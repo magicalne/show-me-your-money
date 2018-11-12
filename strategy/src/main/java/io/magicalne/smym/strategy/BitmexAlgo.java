@@ -55,8 +55,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       for (OrderFlowPrediction ofp : list) {
         try {
           ofp.execute();
-        } catch (ApiException | BitmexCancelOrderException e) {
-          log.error("Bad thing happened. FUCK!", e);
+        } catch (ApiException e) {
+          log.error("Bad thing happened. FUCK! code: {}, body:{}, headers: {}, {}",
+            e.getCode(), e.getResponseBody(), e.getResponseHeaders(), e);
+        } catch (BitmexCancelOrderException e) {
+          log.error("Cancel order failed.", e);
         }
       }
       Thread.sleep(5000);
@@ -207,8 +210,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       }
 
       if (longPosition < 0) { //just long
+        log.info("Just long for {} at best bid: {}, contacts: {}", symbol, bestBid, longAmount);
         Order order = exchange.placeLimitLongOrder(symbol, bestBid, longAmount);
-        log.info("Just long: {}", order);
+        log.info("long order: {}", order);
         longPosition = bestBid;
         longOrderId = order.getOrderID();
       } else { //check filled or not
