@@ -78,10 +78,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private final BitmexExchange exchange;
     private double profit = 0;
     private String longOrderId;
-    private double longPosition;
+    private double longPosition = -1;
     private boolean isLongFilled = false;
     private String shortOrderId;
-    private double shortPosition;
+    private double shortPosition = -1;
     private boolean isShortFilled = false;
 
 
@@ -134,6 +134,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private void shortStrategy(double bestAsk) throws IOException, ApiException, BitmexCancelOrderException {
       if (longPosition > 0) { //from long to short
+        log.info("From long to short.");
         Order order;
         try {
           order = deltaClient.getOrderById(symbol, longOrderId);
@@ -144,11 +145,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus()) ||
           BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus())) {
           order = exchange.placeLimitShortOrder(symbol, bestAsk, order.getCumQty().intValue() + shortAmount);
+          log.info("Just short: {}", order);
           shortOrderId = order.getOrderID();
           shortPosition = bestAsk;
           longPosition = -1;
           longOrderId = null;
         } else {
+          log.info("Cancel long order: {}", longOrderId);
           exchange.cancel(longOrderId);
         }
         return;
@@ -180,6 +183,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private void longStrategy(double bestBid) throws ApiException, IOException, BitmexCancelOrderException {
       if (shortPosition > 0) { //from short to long
+        log.info("From short to long.");
         Order order;
         try {
           order = deltaClient.getOrderById(symbol, shortOrderId);
@@ -190,18 +194,21 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus()) ||
           BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus())) {
           order = exchange.placeLimitLongOrder(symbol, bestBid, order.getCumQty().intValue() + longAmount);
+          log.info("Place short order: order");
           longOrderId = order.getOrderID();
           longPosition = bestBid;
           shortOrderId = null;
           shortPosition = -1;
         } else {
           exchange.cancel(shortOrderId);
+          log.info("Cancel short order: {}", longOrderId);
         }
         return;
       }
 
       if (longPosition < 0) { //just long
         Order order = exchange.placeLimitLongOrder(symbol, bestBid, longAmount);
+        log.info("Just long: {}", order);
         longPosition = bestBid;
         longOrderId = order.getOrderID();
       } else { //check filled or not

@@ -29,15 +29,17 @@ public class BitmexDeltaClient {
   public Order getOrderById(String symbol, String orderId) throws BitmexQueryOrderException, IOException {
     Request req = new Request.Builder().url(baseUrl + "/order?symbol=" + symbol).get().build();
     Call call = client.newCall(req);
-    Response res = call.execute();
-    if (res.isSuccessful()) {
-      ResponseBody body = res.body();
-      Preconditions.checkNotNull(body);
-      TypeReference<List<Order>> ref = new TypeReference<List<Order>>() {};
-      List<Order> orders = objectMapper.readValue(body.string(), ref);
-      for (Order order : orders) {
-        if (order.getOrderID().equals(orderId)) {
-          return order;
+    try (Response res = call.execute()) {
+      if (res.isSuccessful()) {
+        ResponseBody body = res.body();
+        Preconditions.checkNotNull(body);
+        TypeReference<List<Order>> ref = new TypeReference<List<Order>>() {
+        };
+        List<Order> orders = objectMapper.readValue(body.string(), ref);
+        for (Order order : orders) {
+          if (order.getOrderID().equals(orderId)) {
+            return order;
+          }
         }
       }
     }
@@ -47,25 +49,26 @@ public class BitmexDeltaClient {
   public OrderBookL2 getOrderBookL2(String symbol) throws IOException {
     Request req = new Request.Builder().url(baseUrl + "/orderBookL2_25?symbol=" + symbol).get().build();
     Call call = client.newCall(req);
-    Response res = call.execute();
-    if (res.isSuccessful()) {
-      ResponseBody body = res.body();
-      Preconditions.checkNotNull(body);
-      TypeReference<List<OrderBookEntry>> ref = new TypeReference<List<OrderBookEntry>>() {
-      };
-      List<OrderBookEntry> entries = objectMapper.readValue(body.string(), ref);
-      entries.sort(Comparator.comparingDouble(OrderBookEntry::getPrice));
-      List<OrderBookEntry> asks = new ArrayList<>();
-      List<OrderBookEntry> bids = new ArrayList<>();
-      for (OrderBookEntry entry : entries) {
-        if (BUY.equals(entry.getSide())) {
-          bids.add(entry);
-        } else {
-          asks.add(entry);
+    try (Response res = call.execute()) {
+      if (res.isSuccessful()) {
+        ResponseBody body = res.body();
+        Preconditions.checkNotNull(body);
+        TypeReference<List<OrderBookEntry>> ref = new TypeReference<List<OrderBookEntry>>() {
+        };
+        List<OrderBookEntry> entries = objectMapper.readValue(body.string(), ref);
+        entries.sort(Comparator.comparingDouble(OrderBookEntry::getPrice));
+        List<OrderBookEntry> asks = new ArrayList<>();
+        List<OrderBookEntry> bids = new ArrayList<>();
+        for (OrderBookEntry entry : entries) {
+          if (BUY.equals(entry.getSide())) {
+            bids.add(entry);
+          } else {
+            asks.add(entry);
+          }
         }
+        Collections.reverse(bids);
+        return new OrderBookL2(asks, bids);
       }
-      Collections.reverse(bids);
-      return new OrderBookL2(asks, bids);
     }
 
     throw new IOException("Cannot get order book!");
