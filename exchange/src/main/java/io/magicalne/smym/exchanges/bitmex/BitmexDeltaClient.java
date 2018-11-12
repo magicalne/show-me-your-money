@@ -2,13 +2,18 @@ package io.magicalne.smym.exchanges.bitmex;
 
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.datatype.jsr310.ser.OffsetDateTimeSerializer;
 import com.google.common.base.Preconditions;
 import io.swagger.client.model.Order;
 import lombok.Data;
 import okhttp3.*;
 
 import java.io.IOException;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 public class BitmexDeltaClient {
@@ -24,6 +29,8 @@ public class BitmexDeltaClient {
     client = new OkHttpClient();
     baseUrl = "http://"+host+":"+port;
     objectMapper = new ObjectMapper();
+    JavaTimeModule module = new JavaTimeModule();
+    module.addSerializer(OffsetDateTime.class, OffsetDateTimeSerializer.INSTANCE);
   }
 
   public Order getOrderById(String symbol, String orderId) throws BitmexQueryOrderException, IOException {
