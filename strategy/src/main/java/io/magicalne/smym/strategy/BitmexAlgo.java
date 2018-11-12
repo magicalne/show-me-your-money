@@ -17,6 +17,7 @@ import org.dmg.pmml.FieldName;
 import org.dmg.pmml.PMML;
 import org.jpmml.evaluator.*;
 import org.jpmml.model.PMMLUtil;
+import org.knowm.xchange.currency.CurrencyPair;
 import org.xml.sax.SAXException;
 
 import javax.xml.bind.JAXBException;
@@ -79,6 +80,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private final String pmmlPath;
     private final String target;
     private final BitmexExchange exchange;
+    private final CurrencyPair currencyPair;
     private double profit = 0;
     private String longOrderId;
     private double longPosition = -1;
@@ -94,7 +96,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       String pmmlPath = config.getPmmlPath();
       this.evaluator = initPMML(pmmlPath);
       this.queue = new CircularFifoQueue<>(10);
-      this.symbol = config.getSymbol();
+      currencyPair = new CurrencyPair(config.getSymbol());
+      this.symbol = this.currencyPair.base.getCurrencyCode() + this.currencyPair.counter.getCurrencyCode();
       this.shortAmount = config.getShortAmount();
       this.longAmount = config.getLongAmount();
       this.pmmlPath = config.getPmmlPath();
@@ -135,7 +138,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       stopLoss(bestBid, bestAsk);
     }
 
-    private void shortStrategy(double bestAsk) throws IOException, ApiException, BitmexCancelOrderException {
+    private void shortStrategy(double bestAsk) throws IOException {
       if (longPosition > 0) { //from long to short
         log.info("From long to short.");
         Order order;
@@ -147,8 +150,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         }
         if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus()) ||
           BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus())) {
-          order = exchange.placeLimitShortOrder(symbol, bestAsk, order.getCumQty().intValue() + shortAmount);
-          log.info("Just short: {}", order);
+          String orderId = exchange.placeLimitShortOrder(currencyPair, bestAsk,
+            order.getCumQty().intValue() + shortAmount);
+          log.info("Just short: {}", orderId);
           shortOrderId = order.getOrderID();
           shortPosition = bestAsk;
           longPosition = -1;
@@ -160,9 +164,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         return;
       }
       if (shortPosition < 0) {
-        Order order = exchange.placeLimitShortOrder(symbol, bestAsk, shortAmount);
+        String orderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
+        log.info("Place short order: {}", orderId);
         shortPosition = bestAsk;
-        shortOrderId = order.getOrderID();
+        shortOrderId = orderId;
       } else {
         if (!isShortFilled) {
           Order order;
@@ -177,14 +182,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Short {} at {} FILLED.", order.getCumQty(), order.getPrice());
           } else if (shortPosition > bestAsk) { //need to amend price
             log.info("Amend short price from {} to {}.", shortPosition, bestAsk);
-            this.exchange.amendOrderPrice(shortOrderId, bestAsk);
+            this.exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
             shortPosition = bestAsk;
           }
         }
       }
     }
 
-    private void longStrategy(double bestBid) throws ApiException, IOException, BitmexCancelOrderException {
+    private void longStrategy(double bestBid) throws IOException {
       if (shortPosition > 0) { //from short to long
         log.info("From short to long.");
         Order order;
@@ -196,8 +201,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         }
         if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus()) ||
           BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus())) {
-          order = exchange.placeLimitLongOrder(symbol, bestBid, order.getCumQty().intValue() + longAmount);
-          log.info("Place short order: order");
+          String orderId = exchange.placeLimitLongOrder(currencyPair, bestBid,
+            order.getCumQty().intValue() + longAmount);
+          log.info("Place short order: {}", orderId);
           longOrderId = order.getOrderID();
           longPosition = bestBid;
           shortOrderId = null;
@@ -211,10 +217,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
       if (longPosition < 0) { //just long
         log.info("Just long for {} at best bid: {}, contacts: {}", symbol, bestBid, longAmount);
-        Order order = exchange.placeLimitLongOrder(symbol, bestBid, longAmount);
-        log.info("long order: {}", order);
+        String orderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
+        log.info("long order: {}", orderId);
         longPosition = bestBid;
-        longOrderId = order.getOrderID();
+        longOrderId = orderId;
       } else { //check filled or not
         if (!isLongFilled) {
           Order order;
@@ -229,17 +235,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Long {} at {} FILLED.", order.getCumQty(), order.getPrice());
           } else if (longPosition < bestBid) { //need to amend price
             log.info("Amend long price from {} to {}.", longPosition, bestBid);
-            this.exchange.amendOrderPrice(longOrderId, bestBid);
+            this.exchange.amendOrderPrice(longOrderId, longAmount, bestBid);
             longPosition = bestBid;
           }
         }
       }
     }
 
-    private void stopLoss(double bestBid, double bestAsk) throws ApiException {
+    private void stopLoss(double bestBid, double bestAsk) {
       if (isLongFilled) {
         if (longPosition > bestBid) {
-          exchange.placeMarketShortOrder(symbol, longAmount);
+          exchange.placeMarketShortOrder(currencyPair, longAmount);
           log.info("LONG STOP LOSS: from {} to {}", longPosition, bestBid);
           isLongFilled = false;
           longPosition = -1;
@@ -247,7 +253,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         }
       } else if (isShortFilled) {
         if (shortPosition < bestAsk) {
-          exchange.placeMarketLongOrder(symbol, shortAmount);
+          exchange.placeMarketLongOrder(currencyPair, shortAmount);
           log.info("SHORT STOP LOSS: from {} to {}", shortPosition, bestAsk);
           isShortFilled = false;
           shortPosition = -1;
