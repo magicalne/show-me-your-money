@@ -368,14 +368,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         argsMap.put(fieldName, fieldValue);
       }
       final Map<FieldName, ?> results = evaluator.evaluate(argsMap);
-      List<TargetField> targetFields = evaluator.getTargetFields();
-      for (TargetField targetField : targetFields) {
-        FieldName name = targetField.getName();
-        Object targetFieldValue = results.get(name);
-        log.info("target value: {}", targetFieldValue);
-      }
-      return results.get(new FieldName(this.target));
-
+      ProbabilityDistribution pd = (ProbabilityDistribution) results.get(new FieldName(this.target));
+      return pd.getResult();
     }
   }
 }
