@@ -14,12 +14,9 @@ import org.knowm.xchange.dto.trade.MarketOrder;
 import java.math.BigDecimal;
 
 public class BitmexExchange {
-  private static final String URL = "https://testnet.bitmex.com/api/v1";
-//  private static final String URL = "https://www.bitmex.com/api/v1";
 
   public static final String ORDER_STATUS_FILLED = "Filled";
   public static final String ORDER_STATUS_CANCELED = "Canceled";
-  public static final String GOOD_TILL_CANCEL = "GoodTillCancel";
 
   private final BitmexTradeService tradeService;
 
@@ -27,6 +24,8 @@ public class BitmexExchange {
     ExchangeSpecification exSpec = new org.knowm.xchange.bitmex.BitmexExchange().getDefaultExchangeSpecification();
     exSpec.setApiKey(accessId);
     exSpec.setSecretKey(secretKey);
+    exSpec.setSslUri("https://testnet.bitmex.com/");
+    exSpec.setHost("testnet.bitmex.com");
     Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
     tradeService = ((BitmexTradeService) exchange.getTradeService());
   }
