@@ -15,10 +15,7 @@ import org.apache.commons.collections4.queue.CircularFifoQueue;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.dmg.pmml.FieldName;
 import org.dmg.pmml.PMML;
-import org.jpmml.evaluator.Evaluator;
-import org.jpmml.evaluator.FieldValue;
-import org.jpmml.evaluator.InputField;
-import org.jpmml.evaluator.ModelEvaluatorFactory;
+import org.jpmml.evaluator.*;
 import org.jpmml.model.PMMLUtil;
 import org.xml.sax.SAXException;
 
@@ -112,10 +109,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private void setup() throws InterruptedException, IOException {
+      log.info("Warming up...");
       for (int i = 0; i < 10; i ++) {
         this.queue.add(deltaClient.getOrderBookL2(symbol));
         Thread.sleep(5000);
       }
+      log.info("Warming up is done.");
     }
 
     private void execute() throws IOException, ApiException, BitmexCancelOrderException {
@@ -369,6 +368,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         argsMap.put(fieldName, fieldValue);
       }
       final Map<FieldName, ?> results = evaluator.evaluate(argsMap);
+      List<TargetField> targetFields = evaluator.getTargetFields();
+      for (TargetField targetField : targetFields) {
+        FieldName name = targetField.getName();
+        Object targetFieldValue = results.get(name);
+        log.info("target value: {}", targetFieldValue);
+      }
       return results.get(new FieldName(this.target));
 
     }
