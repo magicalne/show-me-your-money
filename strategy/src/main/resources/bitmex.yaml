@@ -1,0 +1,10 @@
+name: xbtusd
+version: 0.1
+deltaHost: localhost
+deltaPort: 4444
+algoTradings:
+  - symbol: XBTUSD
+    shortAmount: 10
+    longAmount: 10
+    pmmlPath: /Users/magiclane/Documents/order_flow_prediction_11_10.pmml
+    target: y
