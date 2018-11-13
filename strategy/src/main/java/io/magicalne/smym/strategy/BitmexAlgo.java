@@ -80,7 +80,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private double shortPosition = -1;
     private boolean isShortFilled = false;
 
-
     public OrderFlowPrediction(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange)
       throws IOException, JAXBException, SAXException {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -149,6 +148,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           shortPosition = bestAsk;
           longPosition = -1;
           longOrderId = null;
+          isLongFilled = false;
         } else {
           log.info("Cancel long order: {}", longOrderId);
           exchange.cancel(longOrderId);
@@ -173,6 +173,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus())) {
             isShortFilled = true;
             log.info("Short {} at {} FILLED.", order.getCumQty(), order.getPrice());
+            profit(false, order.getPrice(), order.getCumQty().intValue());
           } else if (shortPosition > bestAsk) { //need to amend price
             log.info("Amend short price from {} to {}.", shortPosition, bestAsk);
             this.exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
@@ -202,11 +203,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           longPosition = bestBid;
           shortOrderId = null;
           shortPosition = -1;
+          isShortFilled = false;
         } else {
           exchange.cancel(shortOrderId);
           log.info("Cancel short order: {}", shortOrderId);
           shortPosition = -1;
           shortOrderId = null;
+          isShortFilled = false;
         }
         return;
       }
@@ -229,6 +232,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus())) {
             isLongFilled = true;
             log.info("Long {} at {} FILLED.", order.getCumQty(), order.getPrice());
+            profit(true, order.getPrice(), order.getCumQty().intValue());
           } else if (longPosition < bestBid) { //need to amend price
             log.info("Amend long price from {} to {}.", longPosition, bestBid);
             this.exchange.amendOrderPrice(longOrderId, longAmount, bestBid);
@@ -256,6 +260,15 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           shortOrderId = null;
         }
       }
+    }
+
+    private void profit(boolean isBuy, double price, int contracts) {
+      if (isBuy) {
+        profit += price * contracts;
+      } else {
+        profit -= price + contracts;
+      }
+      log.info("PROFIT: {}", profit);
     }
 
     @VisibleForTesting
