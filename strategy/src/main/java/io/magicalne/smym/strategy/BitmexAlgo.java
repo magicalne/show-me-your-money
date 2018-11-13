@@ -3,11 +3,9 @@ package io.magicalne.smym.strategy;
 import com.google.common.annotations.VisibleForTesting;
 import io.magicalne.smym.dto.bitmex.AlgoTrading;
 import io.magicalne.smym.dto.bitmex.BitmexConfig;
-import io.magicalne.smym.exchanges.bitmex.BitmexCancelOrderException;
 import io.magicalne.smym.exchanges.bitmex.BitmexDeltaClient;
 import io.magicalne.smym.exchanges.bitmex.BitmexExchange;
 import io.magicalne.smym.exchanges.bitmex.BitmexQueryOrderException;
-import io.swagger.client.ApiException;
 import io.swagger.client.model.Order;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -54,14 +52,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     for (;;) {
       for (OrderFlowPrediction ofp : list) {
-        try {
-          ofp.execute();
-        } catch (ApiException e) {
-          log.error("Bad thing happened. FUCK! code: {}, body:{}, headers: {}, {}",
-            e.getCode(), e.getResponseBody(), e.getResponseHeaders(), e);
-        } catch (BitmexCancelOrderException e) {
-          log.error("Cancel order failed.", e);
-        }
+        ofp.execute();
       }
       Thread.sleep(5000);
     }
@@ -123,7 +114,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       log.info("Warming up is done.");
     }
 
-    private void execute() throws IOException, ApiException, BitmexCancelOrderException {
+    private void execute() throws IOException {
       BitmexDeltaClient.OrderBookL2 orderBookL2 = deltaClient.getOrderBookL2(symbol);
       double bestAsk = orderBookL2.getBestAsk();
       double bestBid = orderBookL2.getBestBid();

@@ -52,7 +52,7 @@ public class BitmexExchange {
 
   public BitmexPrivateOrder amendOrderPrice(String orderId, int contracts, double price) {
     BitmexReplaceOrderParameters para = new BitmexReplaceOrderParameters(orderId, null, null,
-      null, null, new BigDecimal(contracts), null, new BigDecimal(price),
+      null, new BigDecimal(contracts), null, null, new BigDecimal(price),
       null, null, null);
     return this.tradeService.replaceOrder(para);
   }
