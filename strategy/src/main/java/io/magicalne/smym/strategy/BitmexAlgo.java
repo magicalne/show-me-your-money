@@ -145,7 +145,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           int contracts = order.getCumQty().intValue() + shortAmount;
           String orderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, contracts);
           log.info("Place short: {} at {}, with {}", orderId, bestAsk, contracts);
-          shortOrderId = order.getOrderID();
+          shortOrderId = orderId;
           shortPosition = bestAsk;
           longPosition = -1;
           longOrderId = null;
@@ -198,7 +198,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           String orderId = exchange.placeLimitLongOrder(currencyPair, bestBid,
             order.getCumQty().intValue() + longAmount);
           log.info("Place long order: {}", orderId);
-          longOrderId = order.getOrderID();
+          longOrderId = orderId;
           longPosition = bestBid;
           shortOrderId = null;
           shortPosition = -1;
