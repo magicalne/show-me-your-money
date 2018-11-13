@@ -3,13 +3,17 @@ package io.magicalne.smym.exchanges.bitmex;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.threetenbp.ThreeTenModule;
 import com.google.common.base.Preconditions;
 import io.swagger.client.model.Order;
 import lombok.Data;
 import okhttp3.*;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 public class BitmexDeltaClient {
 
@@ -24,6 +28,8 @@ public class BitmexDeltaClient {
     client = new OkHttpClient();
     baseUrl = "http://"+host+":"+port;
     objectMapper = new ObjectMapper();
+    objectMapper
+      .registerModule(new ThreeTenModule());
   }
 
   public Order getOrderById(String symbol, String orderId) throws BitmexQueryOrderException, IOException {
