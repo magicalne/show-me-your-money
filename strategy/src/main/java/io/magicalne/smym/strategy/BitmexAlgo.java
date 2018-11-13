@@ -15,7 +15,9 @@ import org.dmg.pmml.FieldName;
 import org.dmg.pmml.PMML;
 import org.jpmml.evaluator.*;
 import org.jpmml.model.PMMLUtil;
+import org.knowm.xchange.bitmex.Bitmex;
 import org.knowm.xchange.currency.CurrencyPair;
+import org.knowm.xchange.exceptions.ExchangeException;
 import org.xml.sax.SAXException;
 
 import javax.xml.bind.JAXBException;
@@ -52,9 +54,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     for (;;) {
       for (OrderFlowPrediction ofp : list) {
-        ofp.execute();
+        try {
+          ofp.execute();
+        } catch (BitmexQueryOrderException e) {
+          log.error("Trading with exception: ", e);
+        }
       }
-      Thread.sleep(5000);
     }
 
   }
@@ -75,10 +80,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private double profit = 0;
     private String longOrderId;
     private double longPosition = -1;
-    private boolean isLongFilled = false;
     private String shortOrderId;
     private double shortPosition = -1;
-    private boolean isShortFilled = false;
+    private long start;
 
     public OrderFlowPrediction(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange)
       throws IOException, JAXBException, SAXException {
@@ -110,155 +114,115 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         this.queue.add(deltaClient.getOrderBookL2(symbol));
         Thread.sleep(5000);
       }
+      this.start = System.currentTimeMillis();
       log.info("Warming up is done.");
     }
 
-    private void execute() throws IOException {
+    private void execute() throws IOException, BitmexQueryOrderException {
+      long now = System.currentTimeMillis();
       BitmexDeltaClient.OrderBookL2 orderBookL2 = deltaClient.getOrderBookL2(symbol);
       double bestAsk = orderBookL2.getBestAsk();
       double bestBid = orderBookL2.getBestBid();
-      this.queue.add(orderBookL2);
-      int prediction = (int) predict(extractFeature(queue));
-      if (prediction == 1) {
-        longStrategy(bestBid);
-      } else if (prediction == -1) {
-        shortStrategy(bestAsk);
-      }
-
-      stopLoss(bestBid, bestAsk);
-    }
-
-    private void shortStrategy(double bestAsk) throws IOException {
-      if (longPosition > 0) { //from long to short
-        log.info("From long to short.");
-        Order order;
-        try {
-          order = deltaClient.getOrderById(symbol, longOrderId);
-          log.info("Long order {} : status: {}", longOrderId, order.getOrdStatus());
-        } catch (BitmexQueryOrderException e) {
-          log.error("Query long order {} with exception: {}", longOrderId, e);
-          return;
+      if (now - start < 5000) {
+        //amend order
+        if (longPosition > 0) {
+          tryAmendLong(bestBid);
+        } else if (shortPosition > 0) {
+          tryAmendShort(bestAsk);
         }
-        if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus()) ||
-          BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus())) {
-          int contracts = order.getCumQty().intValue() + shortAmount;
-          String orderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, contracts);
-          log.info("Place short: {} at {}, with {}", orderId, bestAsk, contracts);
-          shortOrderId = orderId;
-          shortPosition = bestAsk;
-          longPosition = -1;
-          longOrderId = null;
-          isLongFilled = false;
-        } else {
-          log.info("Cancel long order: {}", longOrderId);
-          exchange.cancel(longOrderId);
-        }
-        return;
-      }
-      if (shortPosition < 0) {
-        String orderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
-        log.info("Place short order: {}", orderId);
-        shortPosition = bestAsk;
-        shortOrderId = orderId;
       } else {
-        if (!isShortFilled) {
-          Order order;
-          try {
-            order = this.deltaClient.getOrderById(symbol, shortOrderId);
-            log.info("Short order {} : status: {}", shortOrderId, order.getOrdStatus());
-          } catch (BitmexQueryOrderException e) {
-            log.error("Query short order {} with exception: {}", shortOrderId, e);
-            return;
+        this.queue.add(orderBookL2);
+        int prediction = (int) predict(extractFeature(queue));
+        if (prediction == 1 && longPosition < 0) {
+          this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
+          this.longPosition = bestBid;
+        } else if (prediction == -1 && longPosition > 0) {
+          /*
+          query long order status
+          if long order is filled: short
+          if not: amend price
+           */
+          Order order = deltaClient.getOrderById(symbol, longOrderId);
+          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
+            this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
+            this.shortPosition = bestAsk;
+            longOrderId = null;
+            longPosition = -1;
+          } else {
+            tryAmendLong(bestBid);
           }
-          if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus())) {
-            isShortFilled = true;
-            log.info("Short {} at {} FILLED.", order.getCumQty(), order.getPrice());
-            profit(false, order.getPrice(), order.getCumQty().intValue());
-          } else if (shortPosition > bestAsk) { //need to amend price
-            log.info("Amend short price from {} to {}.", shortPosition, bestAsk);
-            this.exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
-            shortPosition = bestAsk;
+        } else if (prediction == -1 && shortPosition < 0) {
+          //place short order
+          this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
+          this.shortPosition = bestAsk;
+        } else if (prediction == 1 && shortPosition > 0) {
+          /*
+          query short order status
+          if short order is filled: long
+          if not: amend price
+           */
+          Order order = deltaClient.getOrderById(symbol, shortOrderId);
+          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
+            this.longOrderId = exchange.placeLimitShortOrder(currencyPair, bestBid, longAmount);
+            this.longPosition = bestBid;
+            shortOrderId = null;
+            shortPosition = -1;
+          } else {
+            tryAmendLong(bestAsk);
           }
         }
+        stopLoss(bestBid, bestAsk);
+        this.start = System.currentTimeMillis();
       }
     }
 
-    private void longStrategy(double bestBid) throws IOException {
-      if (shortPosition > 0) { //from short to long
-        log.info("From short to long.");
-        Order order;
-        try {
-          order = deltaClient.getOrderById(symbol, shortOrderId);
-          log.info("Short order {} : status: {}", shortOrderId, order.getOrdStatus());
-        } catch (BitmexQueryOrderException e) {
-          log.error("Query short order {} with exception: {}", shortOrderId, e);
-          return;
-        }
-        if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus()) ||
-          BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus())) {
-          String orderId = exchange.placeLimitLongOrder(currencyPair, bestBid,
-            order.getCumQty().intValue() + longAmount);
-          log.info("Place long order: {}", orderId);
-          longOrderId = orderId;
+    private void tryAmendLong(double bestBid) {
+      try {
+        Order order = deltaClient.getOrderById(symbol, longOrderId);
+        if (!order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && longPosition < bestBid) {
+          log.info("Amend long position: {}, with best bid price: {}", longPosition, bestBid);
+          exchange.amendOrderPrice(longOrderId, longAmount, bestBid);
           longPosition = bestBid;
-          shortOrderId = null;
-          shortPosition = -1;
-          isShortFilled = false;
-        } else {
-          exchange.cancel(shortOrderId);
-          log.info("Cancel short order: {}", shortOrderId);
-          shortPosition = -1;
-          shortOrderId = null;
-          isShortFilled = false;
         }
-        return;
+      } catch (IOException | BitmexQueryOrderException | ExchangeException e) {
+        log.error("Amend long order with exception.", e);
       }
+    }
 
-      if (longPosition < 0) { //just long
-        log.info("Place long for {} at best bid: {}, contacts: {}", symbol, bestBid, longAmount);
-        String orderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
-        log.info("long order: {}", orderId);
-        longPosition = bestBid;
-        longOrderId = orderId;
-      } else { //check filled or not
-        if (!isLongFilled) {
-          Order order;
-          try {
-            order = this.deltaClient.getOrderById(symbol, longOrderId);
-          } catch (BitmexQueryOrderException e) {
-            log.error("Query long order {} with exception: {}", longOrderId, e);
-            return;
-          }
-          if (BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus())) {
-            isLongFilled = true;
-            log.info("Long {} at {} FILLED.", order.getCumQty(), order.getPrice());
-            profit(true, order.getPrice(), order.getCumQty().intValue());
-          } else if (longPosition < bestBid) { //need to amend price
-            log.info("Amend long price from {} to {}.", longPosition, bestBid);
-            this.exchange.amendOrderPrice(longOrderId, longAmount, bestBid);
-            longPosition = bestBid;
-          }
+    private void tryAmendShort(double bestAsk) {
+      try {
+        Order order = deltaClient.getOrderById(symbol, shortOrderId);
+        if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition > bestAsk) {
+          log.info("Amend short position: {}, with best bid price: {}", shortPosition, bestAsk);
+          exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
+          shortPosition = bestAsk;
         }
+      } catch (IOException | BitmexQueryOrderException | ExchangeException e) {
+        log.error("Amend short order with exception.", e);
       }
     }
 
     private void stopLoss(double bestBid, double bestAsk) {
-      if (isLongFilled) {
-        if (longPosition > bestBid) {
-          exchange.placeMarketShortOrder(currencyPair, longAmount);
-          log.info("LONG STOP LOSS: from {} to {}", longPosition, bestBid);
-          isLongFilled = false;
-          longPosition = -1;
-          longOrderId = null;
+      try {
+        if (longPosition > 0) {
+          Order order = deltaClient.getOrderById(symbol, longOrderId);
+          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && longPosition > bestBid) {
+            exchange.placeMarketShortOrder(currencyPair, longAmount);
+            log.info("LONG STOP LOSS: from {} to {}", longPosition, bestBid);
+            longPosition = -1;
+            longOrderId = null;
+          }
+        } else if (shortPosition > 0) {
+          Order order = deltaClient.getOrderById(symbol, shortOrderId);
+          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition < bestAsk) {
+            exchange.placeMarketLongOrder(currencyPair, shortAmount);
+            log.info("SHORT STOP LOSS: from {} to {}", shortPosition, bestAsk);
+            shortPosition = -1;
+            shortOrderId = null;
+          }
         }
-      } else if (isShortFilled) {
-        if (shortPosition < bestAsk) {
-          exchange.placeMarketLongOrder(currencyPair, shortAmount);
-          log.info("SHORT STOP LOSS: from {} to {}", shortPosition, bestAsk);
-          isShortFilled = false;
-          shortPosition = -1;
-          shortOrderId = null;
-        }
+      } catch (IOException | BitmexQueryOrderException e) {
+        log.error("Query order with exception during stop loss.", e);
       }
     }
 
