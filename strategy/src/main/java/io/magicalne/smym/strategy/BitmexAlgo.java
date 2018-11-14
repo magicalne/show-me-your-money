@@ -133,7 +133,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         this.start = System.currentTimeMillis();
         this.queue.add(orderBookL2);
         int prediction = (int) predict(extractFeature(queue));
-        if (prediction == 1 && longPosition < 0) {
+        if (prediction == 1 && longPosition < 0 && shortPosition < 0) {
           this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
           this.longPosition = bestBid;
           log.info("Place long order {} at {}.", longOrderId, longPosition);
@@ -152,7 +152,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             longPosition = -1;
             log.info("Place short order {} at {}.", shortOrderId, shortPosition);
           }
-        } else if (prediction == -1 && shortPosition < 0) {
+        } else if (prediction == -1 && shortPosition < 0 && longPosition < 0) {
           //place short order
           this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
           this.shortPosition = bestAsk;
