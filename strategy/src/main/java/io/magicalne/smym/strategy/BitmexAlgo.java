@@ -198,7 +198,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       try {
         Order order = deltaClient.getOrderById(symbol, shortOrderId);
         if (!order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition > bestAsk) {
-          log.info("Amend short position: {}, with best bid price: {}", shortPosition, bestAsk);
+          log.info("Amend short position: {}, with best ask price: {}", shortPosition, bestAsk);
           exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
           shortPosition = bestAsk;
         }
@@ -212,7 +212,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (longPosition > 0) {
           Order order = deltaClient.getOrderById(symbol, longOrderId);
           if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && longPosition > bestBid) {
-            exchange.placeMarketShortOrder(currencyPair, longAmount);
+            shortOrderId = exchange.placeMarketShortOrder(currencyPair, longAmount);
+            shortPosition = bestAsk;
             log.info("LONG STOP LOSS: from {} to {}", longPosition, bestBid);
             longPosition = -1;
             longOrderId = null;
@@ -220,7 +221,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         } else if (shortPosition > 0) {
           Order order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition < bestAsk) {
-            exchange.placeMarketLongOrder(currencyPair, shortAmount);
+            longOrderId = exchange.placeMarketLongOrder(currencyPair, shortAmount);
+            longPosition = bestBid;
             log.info("SHORT STOP LOSS: from {} to {}", shortPosition, bestAsk);
             shortPosition = -1;
             shortOrderId = null;
