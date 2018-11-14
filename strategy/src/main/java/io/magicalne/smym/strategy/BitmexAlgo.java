@@ -151,8 +151,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             longOrderId = null;
             longPosition = -1;
             log.info("Place short order {} at {}.", shortOrderId, shortPosition);
-          } else {
-            tryAmendLong(bestBid);
           }
         } else if (prediction == -1 && shortPosition < 0) {
           //place short order
@@ -168,13 +166,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           Order order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
             log.info("Short order: {} is filled, at {}.", shortOrderId, shortPosition);
-            this.longOrderId = exchange.placeLimitShortOrder(currencyPair, bestBid, longAmount);
+            this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
             this.longPosition = bestBid;
             shortOrderId = null;
             shortPosition = -1;
             log.info("Place long order {} at {}.", longOrderId, longPosition);
-          } else {
-            tryAmendLong(bestAsk);
           }
         }
         stopLoss(bestBid, bestAsk);
