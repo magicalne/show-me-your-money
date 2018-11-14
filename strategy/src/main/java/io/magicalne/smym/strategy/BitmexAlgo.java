@@ -130,6 +130,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           tryAmendShort(bestAsk);
         }
       } else {
+        this.start = System.currentTimeMillis();
         this.queue.add(orderBookL2);
         int prediction = (int) predict(extractFeature(queue));
         if (prediction == 1 && longPosition < 0) {
@@ -177,7 +178,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
         }
         stopLoss(bestBid, bestAsk);
-        this.start = System.currentTimeMillis();
       }
     }
 
