@@ -55,7 +55,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       for (OrderFlowPrediction ofp : list) {
         try {
           ofp.execute();
-        } catch (BitmexQueryOrderException e) {
+        } catch (Exception e) {
           log.error("Trading with exception: ", e);
         }
       }
@@ -197,7 +197,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private void tryAmendShort(double bestAsk) {
       try {
         Order order = deltaClient.getOrderById(symbol, shortOrderId);
-        if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition > bestAsk) {
+        if (!order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition > bestAsk) {
           log.info("Amend short position: {}, with best bid price: {}", shortPosition, bestAsk);
           exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
           shortPosition = bestAsk;
