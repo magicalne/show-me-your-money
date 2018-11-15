@@ -24,8 +24,8 @@ public class BitmexExchange {
     ExchangeSpecification exSpec = new org.knowm.xchange.bitmex.BitmexExchange().getDefaultExchangeSpecification();
     exSpec.setApiKey(accessId);
     exSpec.setSecretKey(secretKey);
-    exSpec.setSslUri("https://testnet.bitmex.com/");
-    exSpec.setHost("testnet.bitmex.com");
+//    exSpec.setSslUri("https://testnet.bitmex.com/");
+//    exSpec.setHost("testnet.bitmex.com");
     Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
     tradeService = ((BitmexTradeService) exchange.getTradeService());
   }
