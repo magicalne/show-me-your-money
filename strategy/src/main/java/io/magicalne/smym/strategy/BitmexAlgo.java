@@ -125,17 +125,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       if (now - start < 5000) {
         //amend order
         if (longPosition > 0) {
-          tryAmendLong(bestBid);
+          tryAmendLong(bestAsk);
         } else if (shortPosition > 0) {
-          tryAmendShort(bestAsk);
+          tryAmendShort(bestBid);
         }
       } else {
         this.start = System.currentTimeMillis();
         this.queue.add(orderBookL2);
         int prediction = (int) predict(extractFeature(queue));
         if (prediction == 1 && longPosition < 0 && shortPosition < 0) {
-          this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
-          this.longPosition = bestBid;
+          this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestAsk, longAmount);
+          this.longPosition = bestAsk;
           log.info("Place long order {} at {}.", longOrderId, longPosition);
         } else if (prediction == -1 && longPosition > 0) {
           /*
@@ -146,16 +146,16 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           Order order = deltaClient.getOrderById(symbol, longOrderId);
           if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
             log.info("Long order: {} is filled, at {}.", longOrderId, longPosition);
-            this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
-            this.shortPosition = bestAsk;
+            this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestBid, shortAmount);
+            this.shortPosition = bestBid;
             longOrderId = null;
             longPosition = -1;
             log.info("Place short order {} at {}.", shortOrderId, shortPosition);
           }
         } else if (prediction == -1 && shortPosition < 0 && longPosition < 0) {
           //place short order
-          this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestAsk, shortAmount);
-          this.shortPosition = bestAsk;
+          this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestBid, shortAmount);
+          this.shortPosition = bestBid;
           log.info("Place short order {} at {}.", shortOrderId, shortPosition);
         } else if (prediction == 1 && shortPosition > 0) {
           /*
@@ -166,14 +166,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           Order order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
             log.info("Short order: {} is filled, at {}.", shortOrderId, shortPosition);
-            this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestBid, longAmount);
-            this.longPosition = bestBid;
+            this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestAsk, longAmount);
+            this.longPosition = bestAsk;
             shortOrderId = null;
             shortPosition = -1;
             log.info("Place long order {} at {}.", longOrderId, longPosition);
           }
-        } else {
-          stopLoss(bestBid, bestAsk);
         }
       }
     }
