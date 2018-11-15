@@ -172,8 +172,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             shortPosition = -1;
             log.info("Place long order {} at {}.", longOrderId, longPosition);
           }
+        } else {
+          stopLoss(bestBid, bestAsk);
         }
-        stopLoss(bestBid, bestAsk);
       }
     }
 
