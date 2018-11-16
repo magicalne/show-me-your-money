@@ -4,7 +4,7 @@ import org.knowm.xchange.Exchange;
 import org.knowm.xchange.ExchangeFactory;
 import org.knowm.xchange.ExchangeSpecification;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
-import org.knowm.xchange.bitmex.dto.trade.BitmexReplaceOrderParameters;
+import org.knowm.xchange.bitmex.dto.trade.*;
 import org.knowm.xchange.bitmex.service.BitmexTradeService;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.Order;
@@ -12,6 +12,8 @@ import org.knowm.xchange.dto.trade.LimitOrder;
 import org.knowm.xchange.dto.trade.MarketOrder;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
 
 public class BitmexExchange {
 
@@ -50,11 +52,52 @@ public class BitmexExchange {
     return this.tradeService.placeMarketOrder(marketOrder);
   }
 
+  public List<BitmexPrivateOrder> placePairOrders(String symbol, double bidPrice, double askPrice, int contracts) {
+    BitmexPlaceOrderParameters bidParam = new BitmexPlaceOrderParameters.Builder(symbol)
+      .setSide(BitmexSide.BUY)
+      .setPrice(new BigDecimal(bidPrice))
+      .setOrderQuantity(new BigDecimal(contracts))
+      .setOrderType(BitmexOrderType.LIMIT)
+      .build();
+    PlaceOrderCommand bid = new PlaceOrderCommand(bidParam);
+    BitmexPlaceOrderParameters askParam = new BitmexPlaceOrderParameters.Builder(symbol)
+      .setSide(BitmexSide.SELL)
+      .setPrice(new BigDecimal(askPrice))
+      .setOrderQuantity(new BigDecimal(contracts))
+      .setOrderType(BitmexOrderType.LIMIT)
+      .build();
+    PlaceOrderCommand ask = new PlaceOrderCommand(askParam);
+
+    List<PlaceOrderCommand> commands = Arrays.asList(bid, ask);
+    return this.tradeService.placeOrderBulk(commands);
+  }
+
   public BitmexPrivateOrder amendOrderPrice(String orderId, int contracts, double price) {
-    BitmexReplaceOrderParameters para = new BitmexReplaceOrderParameters(orderId, null, null,
-      null, new BigDecimal(contracts), null, null, new BigDecimal(price),
-      null, null, null);
-    return this.tradeService.replaceOrder(para);
+    BitmexReplaceOrderParameters param = new BitmexReplaceOrderParameters.Builder()
+      .setOrderId(orderId)
+      .setOrderQuantity(new BigDecimal(contracts))
+      .setPrice(new BigDecimal(price))
+      .build();
+    return this.tradeService.replaceOrder(param);
+  }
+
+  public List<BitmexPrivateOrder> amendPairOrder(String longOrderId, double bidPrice,
+                                                 String shortOrderId, double askPrice, int contracts) {
+    BigDecimal orderQuantity = new BigDecimal(contracts);
+    BitmexReplaceOrderParameters bidParam = new BitmexReplaceOrderParameters.Builder()
+      .setOrderId(longOrderId)
+      .setPrice(new BigDecimal(bidPrice))
+      .setOrderQuantity(orderQuantity)
+      .build();
+    ReplaceOrderCommand bid = new ReplaceOrderCommand(bidParam);
+    BitmexReplaceOrderParameters askParam = new BitmexReplaceOrderParameters.Builder()
+      .setOrderId(shortOrderId)
+      .setPrice(new BigDecimal(askPrice))
+      .setOrderQuantity(orderQuantity)
+      .build();
+    ReplaceOrderCommand ask = new ReplaceOrderCommand(askParam);
+    List<ReplaceOrderCommand> pair = Arrays.asList(bid, ask);
+    return this.tradeService.replaceOrderBulk(pair);
   }
 
   public boolean cancel(String orderId) {

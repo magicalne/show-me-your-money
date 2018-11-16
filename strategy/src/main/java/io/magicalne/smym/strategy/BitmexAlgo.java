@@ -15,6 +15,8 @@ import org.dmg.pmml.FieldName;
 import org.dmg.pmml.PMML;
 import org.jpmml.evaluator.*;
 import org.jpmml.model.PMMLUtil;
+import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
+import org.knowm.xchange.bitmex.dto.trade.BitmexSide;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.exceptions.ExchangeException;
 import org.xml.sax.SAXException;
@@ -70,20 +72,20 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private final Evaluator evaluator;
     private final Queue<BitmexDeltaClient.OrderBookL2> queue;
     private final String symbol;
-    private final int shortAmount;
-    private final int longAmount;
+    private final int contracts;
     private final String pmmlPath;
     private final String target;
     private final BitmexExchange exchange;
     private final CurrencyPair currencyPair;
-    private double profit = 0;
     private String longOrderId;
     private double longPosition = -1;
     private String shortOrderId;
     private double shortPosition = -1;
     private long start;
+    static final double OFFSET = 0.5;
+    private int prediction;
 
-    public OrderFlowPrediction(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange)
+    OrderFlowPrediction(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange)
       throws IOException, JAXBException, SAXException {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
       String pmmlPath = config.getPmmlPath();
@@ -91,8 +93,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       this.queue = new CircularFifoQueue<>(10);
       currencyPair = new CurrencyPair(config.getSymbol());
       this.symbol = this.currencyPair.base.getCurrencyCode() + this.currencyPair.counter.getCurrencyCode();
-      this.shortAmount = config.getShortAmount();
-      this.longAmount = config.getLongAmount();
+      this.contracts = config.getContracts();
       this.pmmlPath = config.getPmmlPath();
       this.target = config.getTarget();
       this.exchange = exchange;
@@ -117,124 +118,130 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       log.info("Warming up is done.");
     }
 
-    private void execute() throws IOException, BitmexQueryOrderException {
+    private void execute() throws IOException {
       long now = System.currentTimeMillis();
       BitmexDeltaClient.OrderBookL2 orderBookL2 = deltaClient.getOrderBookL2(symbol);
       double bestAsk = orderBookL2.getBestAsk();
       double bestBid = orderBookL2.getBestBid();
       if (now - start < 5000) {
         //amend order
-        if (longPosition > 0) {
-          tryAmendLong(bestAsk);
-        } else if (shortPosition > 0) {
-          tryAmendShort(bestBid);
+        if (longOrderId != null && shortOrderId != null) {
+          if (prediction == 0) {
+            tryAmendEven(bestBid, bestAsk);
+          } else {
+            tryAmend(bestBid, bestAsk);
+          }
         }
       } else {
         this.start = System.currentTimeMillis();
         this.queue.add(orderBookL2);
-        int prediction = (int) predict(extractFeature(queue));
-        if (prediction == 1 && longPosition < 0 && shortPosition < 0) {
-          this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestAsk, longAmount);
-          this.longPosition = bestAsk;
-          log.info("Place long order {} at {}.", longOrderId, longPosition);
-        } else if (prediction == -1 && longPosition > 0) {
-          /*
-          query long order status
-          if long order is filled: short
-          if not: amend price
-           */
-          Order order = deltaClient.getOrderById(symbol, longOrderId);
-          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
-            log.info("Long order: {} is filled, at {}.", longOrderId, longPosition);
-            this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestBid, shortAmount);
-            this.shortPosition = bestBid;
-            longOrderId = null;
-            longPosition = -1;
-            log.info("Place short order {} at {}.", shortOrderId, shortPosition);
+        if (longOrderId == null && shortOrderId == null) {
+          prediction = (int) predict(extractFeature(queue));
+          List<BitmexPrivateOrder> orderPair;
+          if (prediction == 1) {
+            orderPair = exchange.placePairOrders(symbol, bestBid, bestAsk + OFFSET, contracts);
+          } else if (prediction == -1) {
+            orderPair = exchange.placePairOrders(symbol, bestBid - OFFSET, bestAsk, contracts);
+          } else {
+            orderPair = exchange.placePairOrders(symbol, bestBid, bestAsk, contracts);
           }
-        } else if (prediction == -1 && shortPosition < 0 && longPosition < 0) {
-          //place short order
-          this.shortOrderId = exchange.placeLimitShortOrder(currencyPair, bestBid, shortAmount);
-          this.shortPosition = bestBid;
-          log.info("Place short order {} at {}.", shortOrderId, shortPosition);
-        } else if (prediction == 1 && shortPosition > 0) {
-          /*
-          query short order status
-          if short order is filled: long
-          if not: amend price
-           */
-          Order order = deltaClient.getOrderById(symbol, shortOrderId);
-          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED)) {
-            log.info("Short order: {} is filled, at {}.", shortOrderId, shortPosition);
-            this.longOrderId = exchange.placeLimitLongOrder(currencyPair, bestAsk, longAmount);
-            this.longPosition = bestAsk;
-            shortOrderId = null;
-            shortPosition = -1;
-            log.info("Place long order {} at {}.", longOrderId, longPosition);
+          BitmexPrivateOrder order1 = orderPair.get(0);
+          BitmexPrivateOrder order2 = orderPair.get(1);
+          if (BitmexSide.BUY == order1.getSide()) {
+            longOrderId = order1.getId();
+            longPosition = order1.getPrice().doubleValue();
+            shortOrderId = order2.getId();
+            shortPosition = order2.getPrice().doubleValue();
+          } else {
+            longOrderId = order2.getId();
+            longPosition = order2.getPrice().doubleValue();
+            shortOrderId = order1.getId();
+            shortPosition = order2.getPrice().doubleValue();
           }
         }
       }
     }
 
-    private void tryAmendLong(double bestBid) {
+    private void tryAmendEven(double bestBid, double bestAsk) {
       try {
-        Order order = deltaClient.getOrderById(symbol, longOrderId);
-        if (!order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && longPosition < bestBid) {
-          log.info("Amend long position: {}, with best bid price: {}", longPosition, bestBid);
-          exchange.amendOrderPrice(longOrderId, longAmount, bestBid);
-          longPosition = bestBid;
+        Order longOrder = deltaClient.getOrderById(symbol, longOrderId);
+        Order shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
+        boolean isLongFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
+        boolean isShortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
+        if (isLongFilled) {
+          if (!isShortFilled) {
+            if (bestBid < longPosition) {
+              exchange.amendOrderPrice(shortOrderId, contracts, longPosition);
+              shortPosition = longPosition;
+            }
+          } else {
+            log.info("Both bid and ask were filled. bid: {}, ask: {}", longPosition, shortPosition);
+            longPosition = -1;
+            longOrderId = null;
+            shortPosition = -1;
+            shortOrderId = null;
+          }
+        } else {
+          if (isShortFilled) {
+            if (bestAsk > shortPosition) {
+              exchange.amendOrderPrice(longOrderId, contracts, shortPosition);
+              longPosition = shortPosition;
+            }
+          }
         }
-      } catch (IOException | BitmexQueryOrderException | ExchangeException e) {
+      } catch (BitmexQueryOrderException | IOException | ExchangeException e) {
         log.error("Amend long order with exception.", e);
       }
     }
 
-    private void tryAmendShort(double bestAsk) {
+    private void tryAmend(double bestBid, double bestAsk) {
       try {
-        Order order = deltaClient.getOrderById(symbol, shortOrderId);
-        if (!order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition > bestAsk) {
-          log.info("Amend short position: {}, with best ask price: {}", shortPosition, bestAsk);
-          exchange.amendOrderPrice(shortOrderId, shortAmount, bestAsk);
-          shortPosition = bestAsk;
-        }
-      } catch (IOException | BitmexQueryOrderException | ExchangeException e) {
-        log.error("Amend short order with exception.", e);
-      }
-    }
-
-    private void stopLoss(double bestBid, double bestAsk) {
-      try {
-        if (longPosition > 0) {
-          Order order = deltaClient.getOrderById(symbol, longOrderId);
-          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && longPosition > bestBid) {
-            shortOrderId = exchange.placeMarketShortOrder(currencyPair, longAmount);
-            shortPosition = bestAsk;
-            log.info("LONG STOP LOSS: from {} to {}", longPosition, bestBid);
+        Order longOrder = deltaClient.getOrderById(symbol, longOrderId);
+        Order shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
+        boolean isLongFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
+        boolean isShortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
+        if (isLongFilled) {
+          if (isShortFilled) {
+            log.info("Both bid and ask were filled. bid: {}, ask: {}", longPosition, shortPosition);
             longPosition = -1;
             longOrderId = null;
-          }
-        } else if (shortPosition > 0) {
-          Order order = deltaClient.getOrderById(symbol, shortOrderId);
-          if (order.getOrdStatus().equals(BitmexExchange.ORDER_STATUS_FILLED) && shortPosition < bestAsk) {
-            longOrderId = exchange.placeMarketLongOrder(currencyPair, shortAmount);
-            longPosition = bestBid;
-            log.info("SHORT STOP LOSS: from {} to {}", shortPosition, bestAsk);
             shortPosition = -1;
             shortOrderId = null;
+          } else {
+            int compare = Double.compare(longPosition, bestBid);
+            if (compare == -1 || compare == 0) { //market still goes to high
+              exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+              shortPosition = bestAsk;
+            } else { //market goes to low
+              exchange.amendOrderPrice(shortOrderId, contracts, longPosition);
+              shortPosition = longPosition;
+            }
+          }
+        } else {
+          if (isShortFilled) {
+            int compare = Double.compare(shortPosition, bestAsk);
+            if (compare == 1 || compare == 0) { //market goes to low
+              exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+              longPosition = bestBid;
+            } else { //market still goes to high
+              exchange.amendOrderPrice(longOrderId, contracts, shortPosition);
+              longPosition = shortPosition;
+            }
+          } else { // both sides are no filled
+            if (prediction == 1) {
+              if (Double.compare(longPosition, bestBid) == -1) {
+                exchange.amendPairOrder(longOrderId, bestBid, shortOrderId, bestAsk + OFFSET, contracts);
+              }
+            } else if (prediction == -1) {
+              if (Double.compare(shortPosition, bestAsk) == 1) {
+                exchange.amendPairOrder(longOrderId, bestBid-OFFSET, shortOrderId, bestAsk, contracts);
+              }
+            }
           }
         }
-      } catch (IOException | BitmexQueryOrderException e) {
-        log.error("Query order with exception during stop loss.", e);
+      } catch (IOException | BitmexQueryOrderException | ExchangeException e) {
+        log.error("Amend long order with exception.", e);
       }
-    }
-
-    private void profit(boolean isBuy, double price, int contracts) {
-      if (isBuy) {
-        profit += price * contracts;
-      } else {
-        profit -= price + contracts;
-      }
-      log.info("PROFIT: {}", profit);
     }
 
     @VisibleForTesting
