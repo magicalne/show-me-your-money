@@ -8,4 +8,5 @@ public class AlgoTrading {
   private int contracts;
   private String pmmlPath;
   private String target;
+  private double offset;
 }

@@ -75,6 +75,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private final int contracts;
     private final String pmmlPath;
     private final String target;
+    private final double offset;
     private final BitmexExchange exchange;
     private final CurrencyPair currencyPair;
     private String longOrderId;
@@ -82,7 +83,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private String shortOrderId;
     private double shortPosition = -1;
     private long start;
-    static final double OFFSET = 0.5;
     private int prediction;
 
     OrderFlowPrediction(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange)
@@ -96,6 +96,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       this.contracts = config.getContracts();
       this.pmmlPath = config.getPmmlPath();
       this.target = config.getTarget();
+      this.offset = config.getOffset();
       this.exchange = exchange;
     }
 
@@ -139,9 +140,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           prediction = (int) predict(extractFeature(queue));
           List<BitmexPrivateOrder> orderPair;
           if (prediction == 1) {
-            orderPair = exchange.placePairOrders(symbol, bestBid, bestAsk + OFFSET, contracts);
+            orderPair = exchange.placePairOrders(symbol, bestBid, bestAsk + offset, contracts);
           } else if (prediction == -1) {
-            orderPair = exchange.placePairOrders(symbol, bestBid - OFFSET, bestAsk, contracts);
+            orderPair = exchange.placePairOrders(symbol, bestBid - offset, bestAsk, contracts);
           } else {
             orderPair = exchange.placePairOrders(symbol, bestBid, bestAsk, contracts);
           }
@@ -260,14 +261,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             if (prediction == 1) {
               if (Double.compare(longPosition, bestBid) == -1) {
                 longPosition = bestBid;
-                shortPosition = bestAsk + OFFSET;
+                shortPosition = bestAsk + offset;
                 exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
                 log.info("Prediction: {}. No filled. Amend: long {}, short {}",
                   prediction, longPosition, shortPosition);
               }
             } else if (prediction == -1) {
               if (Double.compare(shortPosition, bestAsk) == 1) {
-                longPosition = bestBid - OFFSET;
+                longPosition = bestBid - offset;
                 shortPosition = bestAsk;
                 exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
                 log.info("Prediction: {}. No filled. Amend: long {}, short {}",
