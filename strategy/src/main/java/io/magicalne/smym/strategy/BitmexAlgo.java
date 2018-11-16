@@ -158,6 +158,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             shortOrderId = order1.getId();
             shortPosition = order2.getPrice().doubleValue();
           }
+          log.info("Prediction: {}.", prediction);
+          log.info("Place long order at {}.", longPosition);
+          log.info("place short order at {}.", shortPosition);
         }
       }
     }
@@ -170,9 +173,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         boolean isShortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
         if (isLongFilled) {
           if (!isShortFilled) {
-            if (bestBid < longPosition) {
-              exchange.amendOrderPrice(shortOrderId, contracts, longPosition);
-              shortPosition = longPosition;
+            if (bestBid < longPosition) { //market goes to low, fast short
+              int compare = Double.compare(longPosition, shortPosition);
+              if (compare < 0) {
+                exchange.amendOrderPrice(shortOrderId, contracts, longPosition);
+                shortPosition = longPosition;
+                log.info("Long order is filled at {}, but short order is not, amend short order to {}",
+                  longPosition, shortPosition);
+              }
             }
           } else {
             log.info("Both bid and ask were filled. bid: {}, ask: {}", longPosition, shortPosition);
@@ -183,9 +191,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
         } else {
           if (isShortFilled) {
-            if (bestAsk > shortPosition) {
-              exchange.amendOrderPrice(longOrderId, contracts, shortPosition);
-              longPosition = shortPosition;
+            if (bestAsk > shortPosition) { //market goes to high, fast long
+              int compare = Double.compare(longPosition, shortPosition);
+              if (compare < 0) {
+                exchange.amendOrderPrice(longOrderId, contracts, shortPosition);
+                longPosition = shortPosition;
+                log.info("Short order is filled at {}, but long order is not, amend long order to {}",
+                  shortPosition, longPosition);
+              }
             }
           }
         }
@@ -210,31 +223,55 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           } else {
             int compare = Double.compare(longPosition, bestBid);
             if (compare == -1 || compare == 0) { //market still goes to high
-              exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
-              shortPosition = bestAsk;
+              if (Double.compare(shortPosition, bestAsk) > 0) {
+                exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+                shortPosition = bestAsk;
+                log.info("Long order is filled at {}, but short order is not, amend short order to {}",
+                  longPosition, shortPosition);
+              }
             } else { //market goes to low
-              exchange.amendOrderPrice(shortOrderId, contracts, longPosition);
-              shortPosition = longPosition;
+              if (Double.compare(shortPosition, longPosition) > 0) {
+                exchange.amendOrderPrice(shortOrderId, contracts, longPosition);
+                shortPosition = longPosition;
+                log.info("Long order is filled at {}, but short order is not, amend short order to {}",
+                  longPosition, shortPosition);
+              }
             }
           }
         } else {
           if (isShortFilled) {
             int compare = Double.compare(shortPosition, bestAsk);
             if (compare == 1 || compare == 0) { //market goes to low
-              exchange.amendOrderPrice(longOrderId, contracts, bestBid);
-              longPosition = bestBid;
+              if (Double.compare(longPosition, bestBid) < 0) {
+                exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+                longPosition = bestBid;
+                log.info("Short order is filled at {}, but long order is not, amend short oder to: {}",
+                  shortPosition, longPosition);
+              }
             } else { //market still goes to high
-              exchange.amendOrderPrice(longOrderId, contracts, shortPosition);
-              longPosition = shortPosition;
+              if (Double.compare(shortPosition, longPosition) > 0) {
+                exchange.amendOrderPrice(longOrderId, contracts, shortPosition);
+                longPosition = shortPosition;
+                log.info("Short order is filled at {}, but long order is not, amend short oder to: {}",
+                  shortPosition, longPosition);
+              }
             }
-          } else { // both sides are no filled
+          } else { // both sides are not filled
             if (prediction == 1) {
               if (Double.compare(longPosition, bestBid) == -1) {
-                exchange.amendPairOrder(longOrderId, bestBid, shortOrderId, bestAsk + OFFSET, contracts);
+                longPosition = bestBid;
+                shortPosition = bestAsk + OFFSET;
+                exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
+                log.info("Prediction: {}. No filled. Amend: long {}, short {}",
+                  prediction, longPosition, shortPosition);
               }
             } else if (prediction == -1) {
               if (Double.compare(shortPosition, bestAsk) == 1) {
-                exchange.amendPairOrder(longOrderId, bestBid-OFFSET, shortOrderId, bestAsk, contracts);
+                longPosition = bestBid - OFFSET;
+                shortPosition = bestAsk;
+                exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
+                log.info("Prediction: {}. No filled. Amend: long {}, short {}",
+                  prediction, longPosition, shortPosition);
               }
             }
           }
