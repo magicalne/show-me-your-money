@@ -83,7 +83,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private String shortOrderId;
     private double shortPosition = -1;
     private long start;
-    private int prediction;
+    private int prediction = Integer.MAX_VALUE;
+    private int previousPrediction;
 
     OrderFlowPrediction(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange)
       throws IOException, JAXBException, SAXException {
@@ -127,6 +128,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       if (now - start < 5000) {
         //amend order
         if (longOrderId != null && shortOrderId != null) {
+
           if (prediction == 0) {
             tryAmendEven(bestBid, bestAsk);
           } else {
@@ -136,8 +138,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       } else {
         this.start = System.currentTimeMillis();
         this.queue.add(orderBookL2);
+        previousPrediction = prediction;
+        prediction = (int) predict(extractFeature(queue));
         if (longOrderId == null && shortOrderId == null) {
-          prediction = (int) predict(extractFeature(queue));
           List<BitmexPrivateOrder> orderPair;
           if (prediction == 1) {
             orderPair = exchange.placePairOrders(symbol, bestBid, bestAsk + offset, contracts);
@@ -258,22 +261,28 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               }
             }
           } else { // both sides are not filled
-            if (prediction == 1) {
+            if (previousPrediction == 1 && prediction == 1) {
               if (Double.compare(longPosition, bestBid) == -1) {
                 longPosition = bestBid;
                 shortPosition = bestAsk + offset;
                 exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
-                log.info("Prediction: {}. No filled. Amend: long {}, short {}",
-                  prediction, longPosition, shortPosition);
+                log.info("Previous prediction: {}, prediction: {}. No filled. Amend: long {}, short {}",
+                  previousPrediction, prediction, longPosition, shortPosition);
               }
-            } else if (prediction == -1) {
+            } else if (previousPrediction == -1 && prediction == -1) {
               if (Double.compare(shortPosition, bestAsk) == 1) {
                 longPosition = bestBid - offset;
                 shortPosition = bestAsk;
                 exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
-                log.info("Prediction: {}. No filled. Amend: long {}, short {}",
-                  prediction, longPosition, shortPosition);
+                log.info("Previous prediction: {}, prediction: {}. No filled. Amend: long {}, short {}",
+                  previousPrediction, prediction, longPosition, shortPosition);
               }
+            } else if (previousPrediction * prediction == -1) {
+              longPosition = bestBid;
+              shortPosition = bestAsk;
+              exchange.amendPairOrder(longOrderId, longPosition, shortOrderId, shortPosition, contracts);
+              log.info("Previous prediction: {}, prediction: {}. No filled. Amend: long {}, short {}",
+                previousPrediction, prediction, longPosition, shortPosition);
             }
           }
         }
