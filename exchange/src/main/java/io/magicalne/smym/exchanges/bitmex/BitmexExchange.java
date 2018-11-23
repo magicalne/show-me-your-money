@@ -12,6 +12,7 @@ import org.knowm.xchange.dto.trade.LimitOrder;
 import org.knowm.xchange.dto.trade.MarketOrder;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -72,6 +73,22 @@ public class BitmexExchange {
     return this.tradeService.placeOrderBulk(commands);
   }
 
+  public List<BitmexPrivateOrder> placeOrdersBulk(String symbol, BitmexSide side, List<Double> bidPrices,
+                                                  List<Integer> contracts) {
+    List<PlaceOrderCommand> commands = new ArrayList<>(bidPrices.size());
+    for (int i = 0; i < bidPrices.size(); i ++) {
+      BitmexPlaceOrderParameters param = new BitmexPlaceOrderParameters.Builder(symbol)
+        .setSide(side)
+        .setPrice(new BigDecimal(bidPrices.get(i)))
+        .setOrderQuantity(new BigDecimal(contracts.get(i)))
+        .setOrderType(BitmexOrderType.LIMIT)
+        .build();
+      PlaceOrderCommand command = new PlaceOrderCommand(param);
+      commands.add(command);
+    }
+    return this.tradeService.placeOrderBulk(commands);
+  }
+
   public BitmexPrivateOrder amendOrderPrice(String orderId, int contracts, double price) {
     BitmexReplaceOrderParameters param = new BitmexReplaceOrderParameters.Builder()
       .setOrderId(orderId)
@@ -102,6 +119,9 @@ public class BitmexExchange {
 
   public boolean cancel(String orderId) {
     return this.tradeService.cancelOrder(orderId);
+  }
 
+  public BitmexPosition setLeverage(String symbol, double leverage) {
+    return this.tradeService.updateLeveragePosition(symbol, new BigDecimal(leverage));
   }
 }

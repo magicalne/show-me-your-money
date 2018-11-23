@@ -6,7 +6,6 @@ import lombok.Data;
 public class AlgoTrading {
   private String symbol;
   private int contracts;
-  private String pmmlPath;
-  private String target;
-  private double offset;
+  private double leverage;
+  private double imbalance;
 }

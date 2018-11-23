@@ -97,6 +97,44 @@ public class BitmexDeltaClient {
     public double getBestAsk() {
       return asks.get(0).getPrice();
     }
+
+    public double imbalance() {
+      long bidVol = bids.get(0).getSize();
+      long askVol = asks.get(0).getSize();
+      return (bidVol - askVol) / (bidVol + askVol);
+    }
+
+    public double findFairBid() {
+      long bidVol = bids.get(0).getSize();
+      long askVol = asks.get(0).getSize();
+      if (bidVol >= askVol) {
+        return getBestBid();
+      } else {
+        for (OrderBookEntry e : bids) {
+          askVol -= e.getSize();
+          if (askVol < 0) {
+            return e.getPrice();
+          }
+        }
+      }
+      return -1;
+    }
+
+    public double findFairAsk() {
+      long bidVol = bids.get(0).getSize();
+      long askVol = asks.get(0).getSize();
+      if (bidVol <= askVol) {
+        return getBestAsk();
+      } else {
+        for (OrderBookEntry e : asks) {
+          bidVol -= e.getSize();
+          if (bidVol < 0) {
+            return e.getPrice();
+          }
+        }
+      }
+      return -1;
+    }
   }
 
   @Data

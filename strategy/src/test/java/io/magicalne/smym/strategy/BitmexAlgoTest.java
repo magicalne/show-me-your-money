@@ -50,7 +50,7 @@ public class BitmexAlgoTest {
   @Test
   public void testExtractFeature() throws IOException {
 
-    Map<String, Double> feature = BitmexAlgo.OrderFlowPrediction.extractFeature(queue);
+    Map<String, Double> feature = BitmexAlgo.MarketMaker.extractFeature(queue);
     SortedSet<String> keys = new TreeSet<>(feature.keySet());
 
     Assert.assertEquals(feature.size(), 320);
