@@ -105,13 +105,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       if (longOrderId != null && shortOrderId != null) {
         amendPrice();
       } else {
-        BitmexDeltaClient.OrderBookL2 orderBookL2 = deltaClient.getOrderBookL2(symbol);
-        List<BitmexDeltaClient.OrderBookEntry> bids = orderBookL2.getBids();
-        List<BitmexDeltaClient.OrderBookEntry> asks = orderBookL2.getAsks();
-        log.info("best bid: {}", bids.get(0));
-        log.info("best ask: {}", asks.get(0));
-        log.info("imbalance: {}", orderBookL2.imbalance());
-//        placeBidAskOrders();
+        placeBidAskOrders();
       }
     }
 
