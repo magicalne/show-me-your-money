@@ -164,7 +164,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
           this.shortPrice = bestAsk;
           log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
-        } else if (longSnapshot >= bestAskSnapshot) {
+        } else if (longSnapshot >= bestAskSnapshot && longSnapshot != shortSnapshot) {
           this.exchange.amendOrderPrice(shortOrderId, contracts, longPrice);
           this.shortPrice = longPrice;
           log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
@@ -174,7 +174,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
           this.longPrice = bestBid;
           log.info("Amend long order from {} to {}.", longPrice, bestBid);
-        } else if (shortSnapshot <= bestBidSnapshot) {
+        } else if (shortSnapshot <= bestBidSnapshot && longSnapshot != shortSnapshot) {
           this.exchange.amendOrderPrice(longOrderId, contracts, shortPrice);
           this.longPrice = shortPrice;
           log.info("Amend long order from {} to {}.", longPrice, bestBid);
