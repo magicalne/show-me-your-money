@@ -101,7 +101,7 @@ public class BitmexDeltaClient {
     public double imbalance() {
       long bidVol = bids.get(0).getSize();
       long askVol = asks.get(0).getSize();
-      return (bidVol - askVol) / (bidVol + askVol);
+      return (bidVol - askVol) *1.0d / (bidVol + askVol);
     }
 
     public double findFairBid() {
