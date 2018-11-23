@@ -193,7 +193,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
         } else if (imb < -this.imbalance) {
           double fairBid = ob.findFairBid();
-          int fairBidSnapshot = (int) fairBid * m;
+          int fairBidSnapshot = (int) (fairBid * m);
           if (fairBidSnapshot != longSnapshot) {
             log.info("3Amend long order from {} to {}.", longPrice, fairBid);
             this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
@@ -206,7 +206,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
         } else if (imb > this.imbalance) {
           double fairAsk = ob.findFairAsk();
-          int fairAskSnapshot = (int) fairAsk * m;
+          int fairAskSnapshot = (int) (fairAsk * m);
           if (fairAskSnapshot != shortSnapshot) {
             log.info("5Amend short order from {} to {}.", shortPrice, fairAsk);
             this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);
