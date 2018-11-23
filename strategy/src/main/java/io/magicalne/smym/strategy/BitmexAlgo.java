@@ -161,9 +161,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         this.shortOrderId = null;
       } else if (longFilled) {
         if (longSnapshot < bestAskSnapshot && bestAskSnapshot < shortSnapshot) {
+          log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
           this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
           this.shortPrice = bestAsk;
-          log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
         } else if (longSnapshot >= bestAskSnapshot && longSnapshot != shortSnapshot) {
           this.exchange.amendOrderPrice(shortOrderId, contracts, longPrice);
           this.shortPrice = longPrice;
@@ -171,51 +171,51 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         }
       } else if (shortFilled) {
         if (shortSnapshot < bestBidSnapshot && bestBidSnapshot < longSnapshot) {
+          log.info("Amend long order from {} to {}.", longPrice, bestBid);
           this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
           this.longPrice = bestBid;
-          log.info("Amend long order from {} to {}.", longPrice, bestBid);
         } else if (shortSnapshot <= bestBidSnapshot && longSnapshot != shortSnapshot) {
+          log.info("Amend long order from {} to {}.", longPrice, bestBid);
           this.exchange.amendOrderPrice(longOrderId, contracts, shortPrice);
           this.longPrice = shortPrice;
-          log.info("Amend long order from {} to {}.", longPrice, bestBid);
         }
       } else {
         if (-this.imbalance <= imb && imb <= this.imbalance) {
           if (longSnapshot < bestBidSnapshot) {
+            log.info("Amend long order from {} to {}", longPrice, bestBid);
             this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
             this.longPrice = bestBid;
-            log.info("Amend long order from {} to {}", longPrice, bestBid);
           }
           if (bestAskSnapshot < shortSnapshot) {
+            log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
             this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
             this.shortPrice = bestAsk;
-            log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
           }
         } else if (imb < -this.imbalance) {
           double fairBid = ob.findFairBid();
           int fairBidSnapshot = (int) fairBid * m;
           if (fairBidSnapshot != longSnapshot) {
+            log.info("Amend long order from {} to {}.", longPrice, fairBid);
             this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
             this.longPrice = fairBid;
-            log.info("Amend long order from {} to {}.", longPrice, fairBid);
           }
           if (bestAskSnapshot < shortSnapshot) {
+            log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
             this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
             this.shortPrice = bestAsk;
-            log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
           }
         } else if (imb > this.imbalance) {
           double fairAsk = ob.findFairAsk();
           int fairAskSnapshot = (int) fairAsk * m;
           if (fairAskSnapshot != shortSnapshot) {
+            log.info("Amend short order from {} to {}.", shortPrice, fairAsk);
             this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);
             this.shortPrice = fairAsk;
-            log.info("Amend short order from {} to {}.", shortPrice, fairAsk);
           }
           if (bestBidSnapshot > longSnapshot) {
+            log.info("Amend long order from {} to {}.", longPrice, bestBid);
             this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
             this.longPrice = bestBid;
-            log.info("Amend long order from {} to {}.", longPrice, bestBid);
           }
         }
       }
