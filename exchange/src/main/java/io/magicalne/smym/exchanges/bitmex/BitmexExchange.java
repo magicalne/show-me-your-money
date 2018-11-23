@@ -59,6 +59,7 @@ public class BitmexExchange {
       .setPrice(new BigDecimal(bidPrice))
       .setOrderQuantity(new BigDecimal(contracts))
       .setOrderType(BitmexOrderType.LIMIT)
+      .setTimeInForce(BitmexTimeInForce.DAY)
       .build();
     PlaceOrderCommand bid = new PlaceOrderCommand(bidParam);
     BitmexPlaceOrderParameters askParam = new BitmexPlaceOrderParameters.Builder(symbol)

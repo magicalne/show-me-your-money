@@ -110,14 +110,16 @@ public class BitmexDeltaClient {
       if (bidVol >= askVol) {
         return getBestBid();
       } else {
+        double finalBid = getBestBid();
         for (OrderBookEntry e : bids) {
           askVol -= e.getSize();
           if (askVol < 0) {
             return e.getPrice();
           }
+          finalBid = e.getPrice();
         }
+        return finalBid;
       }
-      return -1;
     }
 
     public double findFairAsk() {
@@ -126,14 +128,16 @@ public class BitmexDeltaClient {
       if (bidVol <= askVol) {
         return getBestAsk();
       } else {
+        double finalAsk = getBestAsk();
         for (OrderBookEntry e : asks) {
           bidVol -= e.getSize();
           if (bidVol < 0) {
             return e.getPrice();
           }
+          finalAsk = e.getPrice();
         }
+        return finalAsk;
       }
-      return -1;
     }
   }
 
