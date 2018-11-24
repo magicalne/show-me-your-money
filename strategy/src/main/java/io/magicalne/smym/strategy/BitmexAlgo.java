@@ -119,13 +119,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private void execute() throws IOException {
       if (longOrderId != null && shortOrderId != null) {
         amendPrice();
-        if (waitings.size() > 0) {
-          stopLoss();
-        }
       } else {
         if (waitings.size() < count) {
           placeBidAskOrders();
         }
+      }
+      if (waitings.size() > 0) {
+        stopLoss();
       }
     }
 

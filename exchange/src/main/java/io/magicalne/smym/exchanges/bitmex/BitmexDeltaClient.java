@@ -111,6 +111,7 @@ public class BitmexDeltaClient {
         return getBestBid();
       } else {
         double finalBid = getBestBid();
+        askVol = askVol * 2;
         for (OrderBookEntry e : bids) {
           askVol -= e.getSize();
           if (askVol < 0) {
@@ -129,6 +130,7 @@ public class BitmexDeltaClient {
         return getBestAsk();
       } else {
         double finalAsk = getBestAsk();
+        bidVol = bidVol * 2;
         for (OrderBookEntry e : asks) {
           bidVol -= e.getSize();
           if (bidVol < 0) {
