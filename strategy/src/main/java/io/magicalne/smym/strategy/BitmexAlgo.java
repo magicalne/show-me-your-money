@@ -15,7 +15,9 @@ import org.jpmml.evaluator.Evaluator;
 import org.jpmml.evaluator.ModelEvaluatorFactory;
 import org.jpmml.model.PMMLUtil;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
+import org.knowm.xchange.bitmex.dto.trade.BitmexSide;
 import org.knowm.xchange.currency.CurrencyPair;
+import org.knowm.xchange.exceptions.ExchangeException;
 import org.xml.sax.SAXException;
 
 import javax.xml.bind.JAXBException;
@@ -49,10 +51,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       list.add(afp);
     }
 
+    int errorCnt = 0;
     for (;;) {
       for (MarketMaker ofp : list) {
         try {
           ofp.execute();
+        } catch (ExchangeException e) {
+          log.error("Bitmex exehange exception: ", e);
+          errorCnt ++;
+          if (errorCnt > 10) {
+            return;
+          }
         } catch (Exception e) {
           log.error("Trading with exception: ", e);
         }
@@ -73,6 +82,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private final BitmexExchange exchange;
     private final CurrencyPair currencyPair;
     private final double imbalance;
+    private final int count;
+    private final List<OrderHistory> waitings = new ArrayList<>();
     private String longOrderId;
     private String shortOrderId;
     private double longPrice;
@@ -86,6 +97,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       this.contracts = config.getContracts();
       this.leverage = config.getLeverage();
       this.imbalance = config.getImbalance();
+      this.count = config.getCount();
       this.exchange = exchange;
     }
 
@@ -107,9 +119,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private void execute() throws IOException {
       if (longOrderId != null && shortOrderId != null) {
         amendPrice();
-        stopLoss();
+        if (waitings.size() > 0) {
+          stopLoss();
+        }
       } else {
-        placeBidAskOrders();
+        if (waitings.size() < count) {
+          placeBidAskOrders();
+        }
       }
     }
 
@@ -118,21 +134,30 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
         double bestAsk = ob.getBestAsk();
         double bestBid = ob.getBestBid();
-        Order longOrder = deltaClient.getOrderById(symbol, longOrderId);
-        Order shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
-        boolean longFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
-        boolean shortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
-        long now = System.currentTimeMillis();
-        long timeout = now - createAt;
-        if (longFilled && !shortFilled) {
-          double loss = (shortPrice - bestBid) / shortPrice;
-          if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-            exchange.amendOrderPrice(longOrderId, contracts, bestBid);
-          }
-        } else if (!longFilled && shortFilled) {
-          double loss = (bestAsk - longPrice) / longPrice;
-          if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-            exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+
+        Iterator<OrderHistory> iterator = waitings.iterator();
+        while (iterator.hasNext()) {
+          OrderHistory o = iterator.next();
+          String orderId = o.getOrderId();
+          Order order = deltaClient.getOrderById(symbol, orderId);
+          boolean filled = BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus());
+          if (filled) {
+            iterator.remove();
+          } else {
+            long createAt = o.getCreateAt();
+            long timeout = System.currentTimeMillis() - createAt;
+            double price = o.getPrice();
+            if (BitmexSide.BUY == o.getSide()) {
+              double loss = (bestAsk - price) / price;
+              if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
+                exchange.amendOrderPrice(orderId, contracts, bestAsk);
+              }
+            } else {
+              double loss = (price - bestBid) / price;
+              if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
+                exchange.amendOrderPrice(orderId, contracts, bestBid);
+              }
+            }
           }
         }
       } catch (BitmexQueryOrderException | IOException ignored) {
@@ -202,6 +227,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           log.info("Amend short order from {} to {}.", shortPrice, newShortPrice);
           this.exchange.amendOrderPrice(shortOrderId, contracts, newShortPrice);
           this.shortPrice = newShortPrice;
+        } else {
+          log.info("Long order filled at {}. Put short order at {} to waiting list.", longPrice, shortPrice);
+          waitings.add(new OrderHistory(shortOrderId, shortPrice, this.createAt, BitmexSide.SELL));
+          this.longOrderId = null;
+          this.shortOrderId = null;
         }
       } else if (shortFilled) {
         if (shortSnapshot < bestBidSnapshot && bestBidSnapshot < longSnapshot) {
@@ -213,6 +243,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           log.info("Amend long order from {} to {}.", longPrice, newLongPrice);
           this.exchange.amendOrderPrice(longOrderId, contracts, newLongPrice);
           this.longPrice = newLongPrice;
+        } else {
+          log.info("Short order filled at {}. Put long order at {} to waiting list.", shortPrice, longPrice);
+          waitings.add(new OrderHistory(longOrderId, longPrice, this.createAt, BitmexSide.BUY));
+          this.longOrderId = null;
+          this.shortOrderId = null;
         }
       } else {
         if (imb < -this.imbalance) {
@@ -354,6 +389,21 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         this.var = var;
         this.skew = skew;
         this.kurt = kurt;
+      }
+    }
+
+    @Data
+    private static class OrderHistory {
+      private String orderId;
+      private final double price;
+      private long createAt;
+      private BitmexSide side;
+
+      OrderHistory(String orderId, double longPrice, long createAt, BitmexSide side) {
+        this.orderId = orderId;
+        this.price = longPrice;
+        this.createAt = createAt;
+        this.side = side;
       }
     }
 

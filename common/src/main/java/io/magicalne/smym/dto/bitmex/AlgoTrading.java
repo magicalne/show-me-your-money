@@ -8,4 +8,5 @@ public class AlgoTrading {
   private int contracts;
   private double leverage;
   private double imbalance;
+  private int count;
 }
