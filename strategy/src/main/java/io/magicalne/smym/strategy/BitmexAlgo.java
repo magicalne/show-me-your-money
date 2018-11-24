@@ -51,17 +51,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       list.add(afp);
     }
 
-    int errorCnt = 0;
     for (;;) {
       for (MarketMaker ofp : list) {
         try {
           ofp.execute();
         } catch (ExchangeException e) {
           log.error("Bitmex exehange exception: ", e);
-          errorCnt ++;
-          if (errorCnt > 10) {
-            return;
-          }
         } catch (Exception e) {
           log.error("Trading with exception: ", e);
         }
