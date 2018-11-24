@@ -64,6 +64,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
   @Slf4j
   public static class MarketMaker {
 
+    private static final int TIMEOUT = 60*60*1000; //1 hour
+    private static final double STOP_LOSS = 0.02;
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
     private final int contracts;
@@ -75,6 +77,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private String shortOrderId;
     private double longPrice;
     private double shortPrice;
+    private long createAt;
 
     MarketMaker(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -104,9 +107,37 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private void execute() throws IOException {
       if (longOrderId != null && shortOrderId != null) {
         amendPrice();
+        stopLoss();
       } else {
         placeBidAskOrders();
       }
+    }
+
+    private void stopLoss() {
+      try {
+        BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
+        double bestAsk = ob.getBestAsk();
+        double bestBid = ob.getBestBid();
+        Order longOrder = deltaClient.getOrderById(symbol, longOrderId);
+        Order shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
+        boolean longFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
+        boolean shortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
+        long now = System.currentTimeMillis();
+        long timeout = now - createAt;
+        if (longFilled && !shortFilled) {
+          double loss = (shortPrice - bestBid) / shortPrice;
+          if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
+            exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+          }
+        } else if (!longFilled && shortFilled) {
+          double loss = (bestAsk - longPrice) / longPrice;
+          if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
+            exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+          }
+        }
+      } catch (BitmexQueryOrderException | IOException ignored) {
+      }
+
     }
 
     private void placeBidAskOrders() throws IOException {
@@ -131,6 +162,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         this.shortPrice = ask.getPrice().doubleValue();
         log.info("Place long order at {}.", longPrice);
         log.info("Place short order at {}.", shortPrice);
+        this.createAt = System.currentTimeMillis();
       }
     }
 
@@ -143,13 +175,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       try {
         longOrder = deltaClient.getOrderById(symbol, longOrderId);
         shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
-      } catch (BitmexQueryOrderException | IOException e) {
-        log.warn("No such order.");
+      } catch (BitmexQueryOrderException | IOException ignore) {
         return;
       }
       boolean longFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
       boolean shortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
       int m = 10;
+      int t = 5;
+      double tick = 0.5;
       int longSnapshot = (int) (longPrice * m);
       int shortSnapshot = (int) (shortPrice * m);
       int bestBidSnapshot = (int) (bestBid * m);
@@ -164,34 +197,25 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
           this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
           this.shortPrice = bestAsk;
-        } else if (longSnapshot >= bestAskSnapshot && longSnapshot != shortSnapshot) {
-          this.exchange.amendOrderPrice(shortOrderId, contracts, longPrice);
-          this.shortPrice = longPrice;
-          log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
+        } else if (longSnapshot >= bestAskSnapshot && shortSnapshot - longSnapshot > t) {
+          double newShortPrice = longPrice + tick;
+          log.info("Amend short order from {} to {}.", shortPrice, newShortPrice);
+          this.exchange.amendOrderPrice(shortOrderId, contracts, newShortPrice);
+          this.shortPrice = newShortPrice;
         }
       } else if (shortFilled) {
         if (shortSnapshot < bestBidSnapshot && bestBidSnapshot < longSnapshot) {
           log.info("Amend long order from {} to {}.", longPrice, bestBid);
           this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
           this.longPrice = bestBid;
-        } else if (shortSnapshot <= bestBidSnapshot && longSnapshot != shortSnapshot) {
-          log.info("Amend long order from {} to {}.", longPrice, bestBid);
-          this.exchange.amendOrderPrice(longOrderId, contracts, shortPrice);
-          this.longPrice = shortPrice;
+        } else if (shortSnapshot <= bestBidSnapshot && shortSnapshot - longSnapshot > t) {
+          double newLongPrice = shortPrice - tick;
+          log.info("Amend long order from {} to {}.", longPrice, newLongPrice);
+          this.exchange.amendOrderPrice(longOrderId, contracts, newLongPrice);
+          this.longPrice = newLongPrice;
         }
       } else {
-        if (-this.imbalance <= imb && imb <= this.imbalance) {
-          if (longSnapshot < bestBidSnapshot) {
-            log.info("1Amend long order from {} to {}", longPrice, bestBid);
-            this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
-            this.longPrice = bestBid;
-          }
-          if (bestAskSnapshot < shortSnapshot) {
-            log.info("2Amend short order from {} to {}.", shortPrice, bestAsk);
-            this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
-            this.shortPrice = bestAsk;
-          }
-        } else if (imb < -this.imbalance) {
+        if (imb < -this.imbalance) {
           double fairBid = ob.findFairBid();
           int fairBidSnapshot = (int) (fairBid * m);
           if (fairBidSnapshot != longSnapshot) {
