@@ -85,6 +85,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private double longPrice;
     private double shortPrice;
     private long createAt;
+    public static final double TICK = 0.5;
 
     MarketMaker(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -168,11 +169,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       double bestBid = ob.getBestBid();
       List<BitmexPrivateOrder> orderPair = null;
       if (-this.imbalance <= imb && imb <= this.imbalance) {
-        orderPair = this.exchange.placePairOrders(symbol, bestBid, bestAsk, this.contracts);
+        orderPair = this.exchange.placePairOrders(symbol, bestBid - TICK, bestAsk + TICK, this.contracts);
       } else if (imb < -this.imbalance) {
-        orderPair = this.exchange.placePairOrders(symbol, ob.findFairBid(), bestAsk, this.contracts);
+        orderPair = this.exchange.placePairOrders(symbol, ob.findFairBid(), bestAsk + TICK, this.contracts);
       } else if (imb > this.imbalance) {
-        orderPair = this.exchange.placePairOrders(symbol, bestBid, ob.findFairAsk(), this.contracts);
+        orderPair = this.exchange.placePairOrders(symbol, bestBid - TICK, ob.findFairAsk(), this.contracts);
       }
       if (orderPair != null) {
         BitmexPrivateOrder bid = orderPair.get(0);
@@ -189,7 +190,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private void amendPrice() throws IOException {
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
-      double imb = ob.imbalance();
       double bestAsk = ob.getBestAsk();
       double bestBid = ob.getBestBid();
       Order longOrder, shortOrder;
@@ -203,7 +203,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       boolean shortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
       int m = 10;
       int t = 5;
-      double tick = 0.5;
       int longSnapshot = (int) (longPrice * m);
       int shortSnapshot = (int) (shortPrice * m);
       int bestBidSnapshot = (int) (bestBid * m);
@@ -219,7 +218,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
           this.shortPrice = bestAsk;
         } else if (longSnapshot >= bestAskSnapshot && shortSnapshot - longSnapshot > t) {
-          double newShortPrice = longPrice + tick;
+          double newShortPrice = longPrice + TICK;
           log.info("Amend short order from {} to {}.", shortPrice, newShortPrice);
           this.exchange.amendOrderPrice(shortOrderId, contracts, newShortPrice);
           this.shortPrice = newShortPrice;
@@ -235,7 +234,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
           this.longPrice = bestBid;
         } else if (shortSnapshot <= bestBidSnapshot && shortSnapshot - longSnapshot > t) {
-          double newLongPrice = shortPrice - tick;
+          double newLongPrice = shortPrice - TICK;
           log.info("Amend long order from {} to {}.", longPrice, newLongPrice);
           this.exchange.amendOrderPrice(longOrderId, contracts, newLongPrice);
           this.longPrice = newLongPrice;
@@ -246,11 +245,15 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.shortOrderId = null;
         }
       } else {
+        ob = deltaClient.getOrderBookL2(symbol);
+        double imb = ob.imbalance();
+        bestAsk = ob.getBestAsk();
+        bestBid = ob.getBestBid();
         if (imb < -this.imbalance) {
           double fairBid = ob.findFairBid();
           int fairBidSnapshot = (int) (fairBid * m);
           if (longSnapshot < fairBidSnapshot) {
-            fairBid -= tick;
+            fairBid -= TICK;
             fairBidSnapshot -= t;
           }
           if (fairBidSnapshot != longSnapshot) {
@@ -267,7 +270,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           double fairAsk = ob.findFairAsk();
           int fairAskSnapshot = (int) (fairAsk * m);
           if (shortSnapshot > fairAskSnapshot) {
-            fairAsk += tick;
+            fairAsk += TICK;
             fairAskSnapshot += t;
           }
           if (fairAskSnapshot != shortSnapshot) {
