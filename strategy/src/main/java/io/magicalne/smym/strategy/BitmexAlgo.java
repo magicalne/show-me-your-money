@@ -70,6 +70,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.02;
+    public static final String STOP_LOSS_FROM = "STOP LOSS from ";
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
     private final int contracts;
@@ -145,12 +146,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             if (BitmexSide.BUY == o.getSide()) {
               double loss = (bestAsk - price) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-                exchange.amendOrderPrice(orderId, contracts, bestAsk);
+                exchange.amendOrderPrice(orderId, contracts, bestAsk, STOP_LOSS_FROM + price);
               }
             } else {
               double loss = (price - bestBid) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-                exchange.amendOrderPrice(orderId, contracts, bestBid);
+                exchange.amendOrderPrice(orderId, contracts, bestBid, STOP_LOSS_FROM + price);
               }
             }
           }
@@ -248,6 +249,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (imb < -this.imbalance) {
           double fairBid = ob.findFairBid();
           int fairBidSnapshot = (int) (fairBid * m);
+          if (longSnapshot < fairBidSnapshot) {
+            fairBid -= tick;
+            fairBidSnapshot -= t;
+          }
           if (fairBidSnapshot != longSnapshot) {
             log.info("3Amend long order from {} to {}.", longPrice, fairBid);
             this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
@@ -261,6 +266,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         } else if (imb > this.imbalance) {
           double fairAsk = ob.findFairAsk();
           int fairAskSnapshot = (int) (fairAsk * m);
+          if (shortSnapshot > fairAskSnapshot) {
+            fairAsk += tick;
+            fairAskSnapshot += t;
+          }
           if (fairAskSnapshot != shortSnapshot) {
             log.info("5Amend short order from {} to {}.", shortPrice, fairAsk);
             this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);

@@ -90,6 +90,16 @@ public class BitmexExchange {
     return this.tradeService.placeOrderBulk(commands);
   }
 
+  public BitmexPrivateOrder amendOrderPrice(String orderId, int contracts, double price, String text) {
+    BitmexReplaceOrderParameters param = new BitmexReplaceOrderParameters.Builder()
+      .setOrderId(orderId)
+      .setOrderQuantity(new BigDecimal(contracts))
+      .setPrice(new BigDecimal(price))
+      .setText(text)
+      .build();
+    return this.tradeService.replaceOrder(param);
+  }
+
   public BitmexPrivateOrder amendOrderPrice(String orderId, int contracts, double price) {
     BitmexReplaceOrderParameters param = new BitmexReplaceOrderParameters.Builder()
       .setOrderId(orderId)
