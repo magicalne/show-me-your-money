@@ -247,8 +247,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       } else {
         ob = deltaClient.getOrderBookL2(symbol);
         double imb = ob.imbalance();
-        bestAsk = ob.getBestAsk();
-        bestBid = ob.getBestBid();
+//        bestAsk = ob.getBestAsk();
+//        bestBid = ob.getBestBid();
         if (imb < -this.imbalance) {
           double fairBid = ob.findFairBid();
           int fairBidSnapshot = (int) (fairBid * m);
@@ -261,11 +261,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
             this.longPrice = fairBid;
           }
-          if (bestAskSnapshot < shortSnapshot) {
-            log.info("4Amend short order from {} to {}.", shortPrice, bestAsk);
-            this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
-            this.shortPrice = bestAsk;
-          }
+//          if (bestAskSnapshot < shortSnapshot) {
+//            log.info("4Amend short order from {} to {}.", shortPrice, bestAsk);
+//            this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+//            this.shortPrice = bestAsk;
+//          }
         } else if (imb > this.imbalance) {
           double fairAsk = ob.findFairAsk();
           int fairAskSnapshot = (int) (fairAsk * m);
@@ -278,11 +278,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);
             this.shortPrice = fairAsk;
           }
-          if (bestBidSnapshot > longSnapshot) {
-            log.info("6Amend long order from {} to {}.", longPrice, bestBid);
-            this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
-            this.longPrice = bestBid;
-          }
+//          if (bestBidSnapshot > longSnapshot) {
+//            log.info("6Amend long order from {} to {}.", longPrice, bestBid);
+//            this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+//            this.longPrice = bestBid;
+//          }
         }
       }
     }
