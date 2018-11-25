@@ -169,11 +169,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       double bestBid = ob.getBestBid();
       List<BitmexPrivateOrder> orderPair = null;
       if (-this.imbalance <= imb && imb <= this.imbalance) {
-        orderPair = this.exchange.placePairOrders(symbol, bestBid - TICK, bestAsk + TICK, this.contracts);
+        orderPair = this.exchange.placePairOrders(symbol, bestBid - TICK*2, bestAsk + TICK*2, this.contracts);
       } else if (imb < -this.imbalance) {
-        orderPair = this.exchange.placePairOrders(symbol, ob.findFairBid(), bestAsk + TICK, this.contracts);
+        orderPair = this.exchange.placePairOrders(symbol, ob.findFairBid(), bestAsk + TICK*2, this.contracts);
       } else if (imb > this.imbalance) {
-        orderPair = this.exchange.placePairOrders(symbol, bestBid - TICK, ob.findFairAsk(), this.contracts);
+        orderPair = this.exchange.placePairOrders(symbol, bestBid - TICK*2, ob.findFairAsk(), this.contracts);
       }
       if (orderPair != null) {
         BitmexPrivateOrder bid = orderPair.get(0);
