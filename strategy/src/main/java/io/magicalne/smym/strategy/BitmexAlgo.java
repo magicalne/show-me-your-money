@@ -48,7 +48,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     for (AlgoTrading a : algoTradings) {
       MarketMaker afp = new MarketMaker(config.getDeltaHost(), config.getDeltaPort(), a, exchange);
       afp.setup();
-      list.add(afp);
+      return;
+//      list.add(afp);
     }
 
     for (;;) {
@@ -108,6 +109,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private void setup() {
+      List<BitmexPrivateOrder> orders = this.exchange.placePairOrders(symbol, 5000, 3000, 1);
+      BitmexPrivateOrder bid = orders.get(0);
+      BitmexPrivateOrder ask = orders.get(1);
+      log.info("bid order status: {}, ask order status: {}", bid.getOrderStatus(), ask.getOrderStatus());
       if (this.leverage > 0) {
         this.exchange.setLeverage(symbol, leverage);
       }

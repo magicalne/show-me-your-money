@@ -14,6 +14,7 @@ import org.knowm.xchange.dto.trade.MarketOrder;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class BitmexExchange {
@@ -60,6 +61,7 @@ public class BitmexExchange {
       .setOrderQuantity(new BigDecimal(contracts))
       .setOrderType(BitmexOrderType.LIMIT)
       .setTimeInForce(BitmexTimeInForce.DAY)
+      .setExecutionInstructions(Collections.singletonList(BitmexExecutionInstruction.PARTICIPATE_DO_NOT_INITIATE))
       .build();
     PlaceOrderCommand bid = new PlaceOrderCommand(bidParam);
     BitmexPlaceOrderParameters askParam = new BitmexPlaceOrderParameters.Builder(symbol)
@@ -67,6 +69,7 @@ public class BitmexExchange {
       .setPrice(new BigDecimal(askPrice))
       .setOrderQuantity(new BigDecimal(contracts))
       .setOrderType(BitmexOrderType.LIMIT)
+      .setExecutionInstructions(Collections.singletonList(BitmexExecutionInstruction.PARTICIPATE_DO_NOT_INITIATE))
       .build();
     PlaceOrderCommand ask = new PlaceOrderCommand(askParam);
 
