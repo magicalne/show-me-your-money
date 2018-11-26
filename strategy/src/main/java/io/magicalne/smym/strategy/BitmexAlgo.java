@@ -71,7 +71,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.02;
-    public static final String STOP_LOSS_FROM = "STOP LOSS from ";
+    private static final String STOP_LOSS_FROM = "STOP LOSS from ";
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
     private final int contracts;
@@ -86,7 +86,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private double longPrice;
     private double shortPrice;
     private long createAt;
-    public static final double TICK = 0.5;
+    private static final double TICK = 0.5;
 
     MarketMaker(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -109,10 +109,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private void setup() {
-      List<BitmexPrivateOrder> orders = this.exchange.placePairOrders(symbol, 5000, 3000, 1);
-      BitmexPrivateOrder bid = orders.get(0);
-      BitmexPrivateOrder ask = orders.get(1);
-      log.info("bid order status: {}, ask order status: {}", bid.getOrderStatus(), ask.getOrderStatus());
       if (this.leverage > 0) {
         this.exchange.setLeverage(symbol, leverage);
       }
@@ -182,11 +178,18 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       }
       if (orderPair != null) {
         BitmexPrivateOrder bid = orderPair.get(0);
-        this.longOrderId = bid.getId();
         this.longPrice = bid.getPrice().doubleValue();
+        while (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+          bid = this.exchange.placeLimitOrder(symbol, this.longPrice - TICK * 2, contracts, BitmexSide.BUY);
+        }
+        this.longOrderId = bid.getId();
+
         BitmexPrivateOrder ask = orderPair.get(1);
-        this.shortOrderId = ask.getId();
         this.shortPrice = ask.getPrice().doubleValue();
+        while (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+          ask = this.exchange.placeLimitOrder(symbol, this.shortPrice + TICK * 2, contracts, BitmexSide.SELL);
+        }
+        this.shortOrderId = ask.getId();
         log.info("Place long order at {}.", longPrice);
         log.info("Place short order at {}.", shortPrice);
         this.createAt = System.currentTimeMillis();
