@@ -147,12 +147,16 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             if (BitmexSide.BUY == o.getSide()) {
               double loss = (bestAsk - price) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-                exchange.amendOrderPrice(orderId, contracts, bestAsk, STOP_LOSS_FROM + price);
+                this.exchange.cancel(orderId);
+                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.BUY);
+                iterator.remove();
               }
             } else {
               double loss = (price - bestBid) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-                exchange.amendOrderPrice(orderId, contracts, bestBid, STOP_LOSS_FROM + price);
+                this.exchange.cancel(orderId);
+                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.SELL);
+                iterator.remove();
               }
             }
           }
@@ -222,7 +226,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       } else if (longFilled) {
         if (longSnapshot < bestAskSnapshot && bestAskSnapshot < shortSnapshot) {
           log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
-          this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+          BitmexPrivateOrder order = this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+          this.shortOrderId = order.getId();
           this.shortPrice = bestAsk;
         } else if (longSnapshot >= bestAskSnapshot && shortSnapshot - longSnapshot > t) {
           double newShortPrice = longPrice + TICK;
@@ -238,12 +243,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       } else if (shortFilled) {
         if (shortSnapshot < bestBidSnapshot && bestBidSnapshot < longSnapshot) {
           log.info("Amend long order from {} to {}.", longPrice, bestBid);
-          this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+          BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+          this.longOrderId = order.getId();
           this.longPrice = bestBid;
         } else if (shortSnapshot <= bestBidSnapshot && shortSnapshot - longSnapshot > t) {
           double newLongPrice = shortPrice - TICK;
           log.info("Amend long order from {} to {}.", longPrice, newLongPrice);
-          this.exchange.amendOrderPrice(longOrderId, contracts, newLongPrice);
+          BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, newLongPrice);
+          this.longOrderId = order.getId();
           this.longPrice = newLongPrice;
         } else {
           log.info("Short order filled at {}. Put long order at {} to waiting list.", shortPrice, longPrice);
@@ -265,12 +272,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
           if (fairBidSnapshot != longSnapshot) {
             log.info("3Amend long order from {} to {}.", longPrice, fairBid);
-            this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
+            BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
+            this.longOrderId = order.getId();
             this.longPrice = fairBid;
           }
           if (bestAskSnapshot < shortSnapshot) {
             log.info("4Amend short order from {} to {}.", shortPrice, bestAsk);
-            this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+            BitmexPrivateOrder order = this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
+            this.shortOrderId = order.getId();
             this.shortPrice = bestAsk;
           }
         } else if (imb > this.imbalance) {
@@ -282,12 +291,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
           if (fairAskSnapshot != shortSnapshot) {
             log.info("5Amend short order from {} to {}.", shortPrice, fairAsk);
-            this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);
+            BitmexPrivateOrder order = this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);
+            this.shortOrderId = order.getId();
             this.shortPrice = fairAsk;
           }
           if (bestBidSnapshot > longSnapshot) {
             log.info("6Amend long order from {} to {}.", longPrice, bestBid);
-            this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+            BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
+            this.shortOrderId = order.getId();
             this.longPrice = bestBid;
           }
         }
