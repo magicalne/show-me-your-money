@@ -48,8 +48,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     for (AlgoTrading a : algoTradings) {
       MarketMaker afp = new MarketMaker(config.getDeltaHost(), config.getDeltaPort(), a, exchange);
       afp.setup();
-      return;
-//      list.add(afp);
+      list.add(afp);
     }
 
     for (;;) {
