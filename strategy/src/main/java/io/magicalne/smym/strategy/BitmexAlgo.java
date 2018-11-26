@@ -183,24 +183,22 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         BitmexPrivateOrder bid = orderPair.get(0);
         this.longPrice = bid.getPrice().doubleValue();
         while (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
-          bid = this.exchange.placeLimitOrder(symbol, this.longPrice - TICK, contracts, BitmexSide.BUY);
+          this.longPrice = this.longPrice - TICK;
+          bid = this.exchange.placeLimitOrder(symbol, this.longPrice, contracts, BitmexSide.BUY);
         }
         this.longOrderId = bid.getId();
 
         BitmexPrivateOrder ask = orderPair.get(1);
         this.shortPrice = ask.getPrice().doubleValue();
         while (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
-          ask = this.exchange.placeLimitOrder(symbol, this.shortPrice + TICK, contracts, BitmexSide.SELL);
+          this.shortPrice = this.shortPrice + TICK;
+          ask = this.exchange.placeLimitOrder(symbol, this.shortPrice, contracts, BitmexSide.SELL);
         }
         this.shortOrderId = ask.getId();
         log.info("Place long order at {}.", longPrice);
         log.info("Place short order at {}.", shortPrice);
         this.createAt = System.currentTimeMillis();
       }
-    }
-
-    private BitmexPrivateOrder replaceOrder(Order order, BitmexSide side) {
-      return this.exchange.placeLimitOrder(symbol, order.getPrice(), contracts, side);
     }
 
     private void amendPrice() throws IOException {
@@ -213,18 +211,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
       } catch (BitmexQueryOrderException | IOException ignore) {
         return;
-      }
-      boolean longCancelled = BitmexExchange.ORDER_STATUS_CANCELED.equals(longOrder.getOrdStatus());
-      if (longCancelled) {
-        BitmexPrivateOrder order = replaceOrder(longOrder, BitmexSide.BUY);
-        this.longOrderId = order.getId();
-        this.longPrice = order.getPrice().doubleValue();
-      }
-      boolean shortCancelled = BitmexExchange.ORDER_STATUS_CANCELED.equals(shortOrder.getOrdStatus());
-      if (shortCancelled) {
-        BitmexPrivateOrder order = replaceOrder(shortOrder, BitmexSide.SELL);
-        this.shortOrderId = order.getId();
-        this.shortPrice = order.getPrice().doubleValue();
       }
       boolean longFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
       boolean shortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
@@ -242,14 +228,19 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       } else if (longFilled) {
         if (longSnapshot < bestAskSnapshot && bestAskSnapshot < shortSnapshot) {
           log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
-          BitmexPrivateOrder order = this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
-          this.shortOrderId = order.getId();
-          this.shortPrice = bestAsk;
+          BitmexPrivateOrder order = tryAmendShortOrder(shortOrderId, bestAsk);
+          if (order != null) {
+            this.shortOrderId = order.getId();
+            this.shortPrice = bestAsk;
+          }
         } else if (longSnapshot >= bestAskSnapshot && shortSnapshot - longSnapshot > t) {
           double newShortPrice = longPrice + TICK;
           log.info("Amend short order from {} to {}.", shortPrice, newShortPrice);
-          this.exchange.amendOrderPrice(shortOrderId, contracts, newShortPrice);
-          this.shortPrice = newShortPrice;
+          BitmexPrivateOrder order = tryAmendShortOrder(shortOrderId, newShortPrice);
+          if (order != null) {
+            this.shortOrderId = order.getId();
+            this.shortPrice = newShortPrice;
+          }
         } else {
           log.info("Long order filled at {}. Put short order at {} to waiting list.", longPrice, shortPrice);
           waitings.add(new OrderHistory(shortOrderId, shortPrice, this.createAt, BitmexSide.SELL));
@@ -259,15 +250,19 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       } else if (shortFilled) {
         if (shortSnapshot < bestBidSnapshot && bestBidSnapshot < longSnapshot) {
           log.info("Amend long order from {} to {}.", longPrice, bestBid);
-          BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
-          this.longOrderId = order.getId();
-          this.longPrice = bestBid;
+          BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, bestBid);
+          if (order != null) {
+            this.longOrderId = order.getId();
+            this.longPrice = bestBid;
+          }
         } else if (shortSnapshot <= bestBidSnapshot && shortSnapshot - longSnapshot > t) {
           double newLongPrice = shortPrice - TICK;
           log.info("Amend long order from {} to {}.", longPrice, newLongPrice);
-          BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, newLongPrice);
-          this.longOrderId = order.getId();
-          this.longPrice = newLongPrice;
+          BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, newLongPrice);
+          if (order != null) {
+            this.longOrderId = order.getId();
+            this.longPrice = newLongPrice;
+          }
         } else {
           log.info("Short order filled at {}. Put long order at {} to waiting list.", shortPrice, longPrice);
           waitings.add(new OrderHistory(longOrderId, longPrice, this.createAt, BitmexSide.BUY));
@@ -288,15 +283,19 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
           if (fairBidSnapshot != longSnapshot) {
             log.info("3Amend long order from {} to {}.", longPrice, fairBid);
-            BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, fairBid);
-            this.longOrderId = order.getId();
-            this.longPrice = fairBid;
+            BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, fairBid);
+            if (order != null) {
+              this.longOrderId = order.getId();
+              this.longPrice = fairBid;
+            }
           }
           if (bestAskSnapshot < shortSnapshot) {
             log.info("4Amend short order from {} to {}.", shortPrice, bestAsk);
-            BitmexPrivateOrder order = this.exchange.amendOrderPrice(shortOrderId, contracts, bestAsk);
-            this.shortOrderId = order.getId();
-            this.shortPrice = bestAsk;
+            BitmexPrivateOrder order = tryAmendShortOrder(shortOrderId, bestAsk);
+            if (order != null) {
+              this.shortOrderId = order.getId();
+              this.shortPrice = bestAsk;
+            }
           }
         } else if (imb > this.imbalance) {
           double fairAsk = ob.findFairAsk();
@@ -307,17 +306,75 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
           if (fairAskSnapshot != shortSnapshot) {
             log.info("5Amend short order from {} to {}.", shortPrice, fairAsk);
-            BitmexPrivateOrder order = this.exchange.amendOrderPrice(shortOrderId, contracts, fairAsk);
-            this.shortOrderId = order.getId();
-            this.shortPrice = fairAsk;
+            BitmexPrivateOrder order = tryAmendShortOrder(shortOrderId, fairAsk);
+            if (order != null) {
+              this.shortOrderId = order.getId();
+              this.shortPrice = fairAsk;
+            }
           }
           if (bestBidSnapshot > longSnapshot) {
             log.info("6Amend long order from {} to {}.", longPrice, bestBid);
-            BitmexPrivateOrder order = this.exchange.amendOrderPrice(longOrderId, contracts, bestBid);
-            this.shortOrderId = order.getId();
-            this.longPrice = bestBid;
+            BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, bestBid);
+            if (order != null) {
+              this.shortOrderId = order.getId();
+              this.longPrice = bestBid;
+            }
           }
         }
+      }
+    }
+
+    private BitmexPrivateOrder tryAmendLongOrder(String orderId, double price) {
+      try {
+        return exchange.amendOrderPrice(orderId, contracts, price);
+      } catch (ExchangeException e) {
+        while (true) {
+          try {
+            Order o = deltaClient.getOrderById(symbol, orderId);
+            String status = o.getOrdStatus();
+            if (BitmexExchange.ORDER_STATUS_FILLED.equals(status)) {
+              return null;
+            } else if (BitmexExchange.ORDER_STATUS_CANCELED.equals(status)) {
+              break;
+            }
+          } catch (BitmexQueryOrderException | IOException ignore) {
+          }
+        }
+        //order was matching market price and got cancelled, need to replace order
+        double p = price;
+        BitmexPrivateOrder order;
+        do {
+          p = p - 1;
+          order = exchange.placeLimitOrder(symbol, p, contracts, BitmexSide.BUY);
+        } while (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled);
+        return order;
+      }
+    }
+
+    private BitmexPrivateOrder tryAmendShortOrder(String orderId, double price) {
+      try {
+        return exchange.amendOrderPrice(orderId, contracts, price);
+      } catch (ExchangeException e) {
+        while (true) {
+          try {
+            Order o = deltaClient.getOrderById(symbol, orderId);
+            String status = o.getOrdStatus();
+            if (BitmexExchange.ORDER_STATUS_FILLED.equals(status)) {
+              return null;
+            } else if (BitmexExchange.ORDER_STATUS_CANCELED.equals(status)) {
+              break;
+            }
+          } catch (BitmexQueryOrderException | IOException ignore) {
+          }
+        }
+        //order was matching market price and got cancelled, need to replace order
+        double p = price;
+        BitmexPrivateOrder order;
+        do {
+          p = p + 1;
+          order = exchange.placeLimitOrder(symbol, p, contracts, BitmexSide.SELL);
+        } while (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled);
+        return order;
       }
     }
 

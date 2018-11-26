@@ -96,18 +96,7 @@ public class BitmexExchange {
       .setPrice(new BigDecimal(price))
       .setText(text)
       .build();
-    BitmexPrivateOrder order = this.tradeService.replaceOrder(param);
-    double p = price;
-    while (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
-      if (order.getSide() == BitmexSide.BUY) {
-        p = p - 1;
-        order = placeLimitOrder(order.getSymbol(), p, contracts, BitmexSide.BUY);
-      } else {
-        p = p + 1;
-        order = placeLimitOrder(order.getSymbol(), p, contracts, BitmexSide.SELL);
-      }
-    }
-    return order;
+    return this.tradeService.replaceOrder(param);
   }
 
   public BitmexPrivateOrder amendOrderPrice(String orderId, int contracts, double price) {
