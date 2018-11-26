@@ -97,13 +97,13 @@ public class BitmexExchange {
       .setText(text)
       .build();
     BitmexPrivateOrder order = this.tradeService.replaceOrder(param);
+    double p = price;
     while (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
-      double p;
       if (order.getSide() == BitmexSide.BUY) {
-        p = price - 1;
+        p = p - 1;
         order = placeLimitOrder(order.getSymbol(), p, contracts, BitmexSide.BUY);
       } else {
-        p = price + 1;
+        p = p + 1;
         order = placeLimitOrder(order.getSymbol(), p, contracts, BitmexSide.SELL);
       }
     }
