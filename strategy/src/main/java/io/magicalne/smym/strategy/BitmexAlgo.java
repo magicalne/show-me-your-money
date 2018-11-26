@@ -199,6 +199,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       }
     }
 
+    private BitmexPrivateOrder replaceOrder(Order order, BitmexSide side) {
+      return this.exchange.placeLimitOrder(symbol, order.getPrice(), contracts, side);
+    }
+
     private void amendPrice() throws IOException {
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
       double bestAsk = ob.getBestAsk();
@@ -209,6 +213,18 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
       } catch (BitmexQueryOrderException | IOException ignore) {
         return;
+      }
+      boolean longCancelled = BitmexExchange.ORDER_STATUS_CANCELED.equals(longOrder.getOrdStatus());
+      if (longCancelled) {
+        BitmexPrivateOrder order = replaceOrder(longOrder, BitmexSide.BUY);
+        this.longOrderId = order.getId();
+        this.longPrice = order.getPrice().doubleValue();
+      }
+      boolean shortCancelled = BitmexExchange.ORDER_STATUS_CANCELED.equals(shortOrder.getOrdStatus());
+      if (shortCancelled) {
+        BitmexPrivateOrder order = replaceOrder(shortOrder, BitmexSide.SELL);
+        this.shortOrderId = order.getId();
+        this.shortPrice = order.getPrice().doubleValue();
       }
       boolean longFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(longOrder.getOrdStatus());
       boolean shortFilled = BitmexExchange.ORDER_STATUS_FILLED.equals(shortOrder.getOrdStatus());
