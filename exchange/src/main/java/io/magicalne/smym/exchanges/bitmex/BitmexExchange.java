@@ -46,7 +46,6 @@ public class BitmexExchange {
       .setSide(side)
       .setOrderQuantity(new BigDecimal(contracts))
       .setOrderType(BitmexOrderType.MARKET)
-      .setExecutionInstructions(Collections.singletonList(BitmexExecutionInstruction.PARTICIPATE_DO_NOT_INITIATE))
       .build();
     return this.tradeService.placeOrder(param);
   }

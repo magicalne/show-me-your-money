@@ -48,7 +48,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     for (AlgoTrading a : algoTradings) {
       MarketMaker afp = new MarketMaker(config.getDeltaHost(), config.getDeltaPort(), a, exchange);
       afp.setup();
-      list.add(afp);
+//      list.add(afp);
+      return;
     }
 
     for (;;) {
@@ -108,6 +109,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private void setup() {
+      BitmexPrivateOrder order = this.exchange.placeLimitOrder(symbol, 3300, contracts, BitmexSide.BUY);
+      boolean cancel = this.exchange.cancel(order.getId());
+      log.info("#########cancel: {}#########", cancel);
       if (this.leverage > 0) {
         this.exchange.setLeverage(symbol, leverage);
       }
