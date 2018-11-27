@@ -69,7 +69,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
   public static class MarketMaker {
 
     private static final int TIMEOUT = 60*60*1000; //1 hour
-    private static final double STOP_LOSS = 0.02;
+    private static final double STOP_LOSS = 0.01;
     private static final String STOP_LOSS_FROM = "STOP LOSS from ";
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
