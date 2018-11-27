@@ -69,7 +69,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
   @Slf4j
   public static class MarketMaker {
 
-    private static final int TIMEOUT = 60*60*1000; //1 hour
+    private static final int TIMEOUT = 3*1000; //1 hour
+//    private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.02;
     private static final String STOP_LOSS_FROM = "STOP LOSS from ";
     private final BitmexDeltaClient deltaClient;
@@ -109,11 +110,15 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private void setup() {
-      BitmexPrivateOrder order = this.exchange.placeLimitOrder(symbol, 3300, contracts, BitmexSide.BUY);
-      boolean cancel = this.exchange.cancel(order.getId());
-      log.info("#########cancel: {}#########", cancel);
       if (this.leverage > 0) {
         this.exchange.setLeverage(symbol, leverage);
+      }
+      for (int i = 0; i < 5; i ++) {
+        BitmexPrivateOrder order = this.exchange.placeLimitOrder(symbol, 3200 + i, contracts, BitmexSide.BUY);
+        this.waitings.add(new OrderHistory(order.getId(), order.getPrice().doubleValue(), System.currentTimeMillis(), BitmexSide.BUY));
+      }
+      while (waitings.size() > 0) {
+        stopLoss();
       }
     }
 
@@ -151,15 +156,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             if (BitmexSide.BUY == o.getSide()) {
               double loss = (bestAsk - price) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-                this.exchange.cancel(orderId);
-                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.BUY);
+                boolean cancel = this.exchange.cancel(orderId);
+                log.info("Cancel {} : {}", orderId, cancel);
+//                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.BUY);
                 iterator.remove();
               }
             } else {
               double loss = (price - bestBid) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
-                this.exchange.cancel(orderId);
-                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.SELL);
+                boolean cancel = this.exchange.cancel(orderId);
+                log.info("Cancel {} : {}", orderId, cancel);
+//                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.SELL);
                 iterator.remove();
               }
             }
@@ -228,10 +235,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (longSnapshot < bestAskSnapshot && bestAskSnapshot < shortSnapshot) {
           log.info("Amend short order from {} to {}.", shortPrice, bestAsk);
           BitmexPrivateOrder order = tryAmendShortOrder(shortOrderId, bestAsk, shortCanceled);
-          if (order != null) {
-            this.shortOrderId = order.getId();
-            this.shortPrice = bestAsk;
-          }
+          this.shortOrderId = order.getId();
+          this.shortPrice = bestAsk;
         } else if (longSnapshot >= bestAskSnapshot && shortSnapshot - longSnapshot > t) {
           double newShortPrice = longPrice + TICK;
           log.info("Amend short order from {} to {}.", shortPrice, newShortPrice);
@@ -245,7 +250,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.shortOrderId = null;
         }
       } else if (shortFilled) {
-        if (shortSnapshot <= bestBidSnapshot && bestBidSnapshot < longSnapshot) {
+        if (shortSnapshot < bestBidSnapshot && bestBidSnapshot < longSnapshot) {
           log.info("Amend long order from {} to {}.", longPrice, bestBid);
           BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, bestBid, longCanceled);
           this.longOrderId = order.getId();
