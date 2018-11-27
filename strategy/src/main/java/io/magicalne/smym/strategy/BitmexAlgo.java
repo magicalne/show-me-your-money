@@ -48,8 +48,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     for (AlgoTrading a : algoTradings) {
       MarketMaker afp = new MarketMaker(config.getDeltaHost(), config.getDeltaPort(), a, exchange);
       afp.setup();
-//      list.add(afp);
-      return;
+      list.add(afp);
     }
 
     for (;;) {
@@ -69,8 +68,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
   @Slf4j
   public static class MarketMaker {
 
-    private static final int TIMEOUT = 3*1000; //1 hour
-//    private static final int TIMEOUT = 60*60*1000; //1 hour
+    private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.02;
     private static final String STOP_LOSS_FROM = "STOP LOSS from ";
     private final BitmexDeltaClient deltaClient;
@@ -113,13 +111,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       if (this.leverage > 0) {
         this.exchange.setLeverage(symbol, leverage);
       }
-      for (int i = 0; i < 5; i ++) {
-        BitmexPrivateOrder order = this.exchange.placeLimitOrder(symbol, 3200 + i, contracts, BitmexSide.BUY);
-        this.waitings.add(new OrderHistory(order.getId(), order.getPrice().doubleValue(), System.currentTimeMillis(), BitmexSide.BUY));
-      }
-      while (waitings.size() > 0) {
-        stopLoss();
-      }
     }
 
     private void execute() throws IOException {
@@ -158,7 +149,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
                 boolean cancel = this.exchange.cancel(orderId);
                 log.info("Cancel {} : {}", orderId, cancel);
-//                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.BUY);
+                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.BUY);
                 iterator.remove();
               }
             } else {
@@ -166,7 +157,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
                 boolean cancel = this.exchange.cancel(orderId);
                 log.info("Cancel {} : {}", orderId, cancel);
-//                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.SELL);
+                exchange.placeMarketLongOrder(symbol, contracts, BitmexSide.SELL);
                 iterator.remove();
               }
             }
