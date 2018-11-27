@@ -298,7 +298,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (bestBidSnapshot > longSnapshot) {
             log.info("6Amend long order from {} to {}.", longPrice, bestBid);
             BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, bestBid, longCanceled);
-            this.shortOrderId = order.getId();
+            this.longOrderId = order.getId();
             this.longPrice = bestBid;
           }
         }
