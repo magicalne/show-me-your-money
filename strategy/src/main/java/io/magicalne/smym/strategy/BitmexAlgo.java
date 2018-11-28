@@ -138,12 +138,42 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           String orderId = o.getOrderId();
           Order order = deltaClient.getOrderById(symbol, orderId);
           boolean filled = BitmexExchange.ORDER_STATUS_FILLED.equals(order.getOrdStatus());
+          boolean canceled = BitmexExchange.ORDER_STATUS_CANCELED.equals(order.getOrdStatus());
           if (filled) {
             iterator.remove();
+          } else if (canceled) {
+            log.info("Place order at stop loss phase for order: {}", o);
+            int m = 10;
+            int oppositeSnapshot = (int) (o.getOppositePrice() * m);
+            int bestBidSnapshot = (int) (bestBid * m);
+            int bestAskSnapshot = (int) (bestAsk * m);
+            if (BitmexSide.BUY == o.getSide()) {
+              if (oppositeSnapshot > bestBidSnapshot) {
+                BitmexPrivateOrder bitmexPrivateOrder =
+                  this.exchange.placeLimitOrder(symbol, bestBid, contracts, BitmexSide.BUY);
+                o.setOrderId(bitmexPrivateOrder.getId());
+              } else {
+                double newLongPrice = o.getOppositePrice() - TICK;
+                BitmexPrivateOrder bitmexPrivateOrder =
+                  this.exchange.placeLimitOrder(symbol, newLongPrice, contracts, BitmexSide.BUY);
+                o.setOrderId(bitmexPrivateOrder.getId());
+              }
+            } else {
+              if (oppositeSnapshot < bestAskSnapshot) {
+                BitmexPrivateOrder bitmexPrivateOrder =
+                  this.exchange.placeLimitOrder(symbol, bestAsk, contracts, BitmexSide.SELL);
+                o.setOrderId(bitmexPrivateOrder.getId());
+              } else {
+                double newShortPrice = o.getOppositePrice() + TICK;
+                BitmexPrivateOrder bitmexPrivateOrder =
+                  this.exchange.placeLimitOrder(symbol, newShortPrice, contracts, BitmexSide.SELL);
+                o.setOrderId(bitmexPrivateOrder.getId());
+              }
+            }
           } else {
             long createAt = o.getCreateAt();
             long timeout = System.currentTimeMillis() - createAt;
-            double price = o.getPrice();
+            double price = o.getOppositePrice();
             if (BitmexSide.BUY == o.getSide()) {
               double loss = (bestAsk - price) / price;
               if (timeout >= TIMEOUT || loss >= STOP_LOSS) {
@@ -236,7 +266,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.shortPrice = newShortPrice;
         } else {
           log.info("Long order filled at {}. Put short order at {} to waiting list.", longPrice, shortPrice);
-          waitings.add(new OrderHistory(shortOrderId, shortPrice, this.createAt, BitmexSide.SELL));
+          waitings.add(new OrderHistory(shortOrderId, longPrice, this.createAt, BitmexSide.SELL));
           this.longOrderId = null;
           this.shortOrderId = null;
         }
@@ -254,7 +284,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.longPrice = newLongPrice;
         } else {
           log.info("Short order filled at {}. Put long order at {} to waiting list.", shortPrice, longPrice);
-          waitings.add(new OrderHistory(longOrderId, longPrice, this.createAt, BitmexSide.BUY));
+          waitings.add(new OrderHistory(longOrderId, shortPrice, this.createAt, BitmexSide.BUY));
           this.longOrderId = null;
           this.shortOrderId = null;
         }
@@ -430,13 +460,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     @Data
     private static class OrderHistory {
       private String orderId;
-      private final double price;
+      private final double oppositePrice;
       private long createAt;
       private BitmexSide side;
 
-      OrderHistory(String orderId, double longPrice, long createAt, BitmexSide side) {
+      OrderHistory(String orderId, double oppositePrice, long createAt, BitmexSide side) {
         this.orderId = orderId;
-        this.price = longPrice;
+        this.oppositePrice = oppositePrice;
         this.createAt = createAt;
         this.side = side;
       }
