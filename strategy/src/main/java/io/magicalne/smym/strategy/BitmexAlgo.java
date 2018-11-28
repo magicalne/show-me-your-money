@@ -315,7 +315,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             fairBid -= TICK;
             fairBidSnapshot -= t;
           }
-          if (fairBidSnapshot != longSnapshot) {
+          if (fairBidSnapshot != longSnapshot && compare < 0) {
             log.info("3Amend long order from {} to {}.", longPrice, fairBid);
             BitmexPrivateOrder order = tryAmendLongOrder(longOrderId, fairBid, longCanceled);
             this.longOrderId = order.getId();
@@ -343,7 +343,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             fairAsk += TICK;
             fairAskSnapshot += t;
           }
-          if (fairAskSnapshot != shortSnapshot) {
+          if (fairAskSnapshot != shortSnapshot && compare > 0) {
             log.info("5Amend short order from {} to {}.", shortPrice, fairAsk);
             BitmexPrivateOrder order = tryAmendShortOrder(shortOrderId, fairAsk, shortCanceled);
             this.shortOrderId = order.getId();
