@@ -328,7 +328,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             this.shortPrice = bestAsk;
           }
         } else if (imb > this.imbalance) {
-          if (compare == 0 && bestAskSnapshot - t != shortSnapshot) {
+          if (compare == 0 && bestAskSnapshot + t != shortSnapshot) {
             log.info("Mid price does not change");
             double newShortPrice = bestAsk + TICK;
             log.info("1Amend short price from {} to {}.", shortPrice, newShortPrice);
