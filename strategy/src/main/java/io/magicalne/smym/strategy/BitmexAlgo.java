@@ -187,7 +187,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
           }
         } else {
-          if (mi > IMBALANCE && bestBid.getSize() >= SIZE_THRESHOLD) {
+          if (mi < -IMBALANCE && bestBid.getSize() >= SIZE_THRESHOLD) {
             BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
             this.longOrderId = order.getId();
             this.longPrice = bestBid.getPrice();
@@ -223,7 +223,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
           }
         } else {
-          if (-IMBALANCE < mi && bestAsk.getSize() >= SIZE_THRESHOLD) {
+          if (mi < 2 && mi > IMBALANCE && bestAsk.getSize() >= SIZE_THRESHOLD) {
             BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestAsk.getPrice(), contracts, BitmexSide.SELL);
             this.shortOrderId = order.getId();
             this.shortPrice = bestAsk.getPrice();
