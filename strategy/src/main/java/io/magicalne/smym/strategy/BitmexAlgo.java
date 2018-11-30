@@ -146,11 +146,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           this.shortPrice = bestAsk.getPrice();
         } else if (mi < 2 && mi > IMBALANCE && bestAsk.getSize() > SIZE_THRESHOLD) {
           //market buy is taking the lead, place short limit order
-          BitmexPrivateOrder order = this.exchange.placeLimitOrder(symbol, bestAsk.getPrice(), contracts, BitmexSide.SELL);
+          BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestAsk.getPrice(), contracts, BitmexSide.SELL);
           this.shortPrice = bestAsk.getPrice();
           this.shortOrderId = order.getId();
-        } else if (mi < 2 && -IMBALANCE < mi && bestBid.getSize() > SIZE_THRESHOLD) {
-          BitmexPrivateOrder order = this.exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
+        } else if (mi < 2 && mi < -IMBALANCE && bestBid.getSize() > SIZE_THRESHOLD) {
+          //market sell is taking the lead, place long limit order
+          BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
           this.longPrice = bestBid.getPrice();
           this.longOrderId = order.getId();
         }
@@ -158,14 +159,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (longOrderId != null) {
           BitmexPrivateOrder longOrder = deltaClient.getOrderById(symbol, longOrderId);
           if (longOrder.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
-            log.info("Long order filled at {}.", longPrice);
-            this.longOrderId = null;
             longFilled = true;
-            if (shortFilled) {
-              longFilled = false;
-              shortFilled = false;
-              return;
-            }
+            log.info("Long order filled at {}.", longPrice);
             if (shortOrderId == null) {
               BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestAsk.getPrice(), contracts, BitmexSide.SELL);
               this.shortOrderId = order.getId();
@@ -173,7 +168,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               log.info("Place short order at {}.", shortPrice);
             }
           } else {
-            if (mi < 2 && -IMBALANCE < mi && shortFilled) { // market sell taking the lead now, not good for long limit order.
+            if (mi < 2 && -IMBALANCE < mi && !longFilled) { // market sell taking the lead now, not good for long limit order.
               boolean cancel = exchange.cancel(longOrderId);
               if (cancel) {
                 log.info("Cancel long order at {} due to too many market sell volumes.", longPrice);
@@ -195,15 +190,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (shortOrderId != null) {
           BitmexPrivateOrder shortOrder = deltaClient.getOrderById(symbol, shortOrderId);
           if (shortOrder.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
+            shortFilled = true;
             log.info("Short order filled at {}.", shortPrice);
             this.shortOrderId = null;
-            shortFilled = true;
-            if (longFilled) {
-              shortFilled = false;
-              longFilled = false;
-            }
           } else {
-            if (mi < 2 && mi > IMBALANCE) { // market buy taking the lead now, not good for short limit order.
+            if (mi < 2 && mi > IMBALANCE && !shortFilled) { // market buy taking the lead now, not good for short limit order.
               boolean cancel = exchange.cancel(shortOrderId);
               if (cancel) {
                 log.info("Cancel short order at {} due to too many market buy volumes.", shortPrice);
@@ -221,6 +212,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Place limit short order at {}.", this.shortPrice);
           }
         }
+      }
+      if (longFilled && shortFilled) {
+        longFilled = false;
+        shortFilled = false;
       }
     }
 
