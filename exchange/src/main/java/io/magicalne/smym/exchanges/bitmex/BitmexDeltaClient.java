@@ -2,6 +2,7 @@ package io.magicalne.smym.exchanges.bitmex;
 
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.threetenbp.ThreeTenModule;
 import com.google.common.base.Preconditions;
@@ -27,6 +28,7 @@ public class BitmexDeltaClient {
     client = new OkHttpClient();
     baseUrl = "http://"+host+":"+port;
     objectMapper = new ObjectMapper();
+    objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     objectMapper
       .registerModule(new ThreeTenModule());
   }
