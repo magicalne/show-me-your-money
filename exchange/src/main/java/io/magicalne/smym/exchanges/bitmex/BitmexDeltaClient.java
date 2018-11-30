@@ -8,6 +8,8 @@ import com.google.common.base.Preconditions;
 import io.swagger.client.model.Order;
 import lombok.Data;
 import okhttp3.*;
+import org.knowm.xchange.bitmex.dto.marketdata.BitmexPublicTrade;
+import org.knowm.xchange.bitmex.dto.trade.BitmexSide;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -78,6 +80,81 @@ public class BitmexDeltaClient {
     }
 
     throw new IOException("Cannot get order book!");
+  }
+
+  public Trades getTrade(String symbol) throws IOException {
+    Request req = new Request.Builder().url(baseUrl + "/trade?symbol=" + symbol).get().build();
+    Call call = client.newCall(req);
+    try (Response res = call.execute()) {
+      if (res.isSuccessful()) {
+        ResponseBody body = res.body();
+        Preconditions.checkNotNull(body);
+        return objectMapper.readValue(body.string(), Trades.class);
+      }
+    }
+
+    throw new IOException("Cannot get order book!");
+  }
+
+  @Data
+  public static class Trades {
+    private List<BitmexPublicTrade> trades;
+
+    public Stats recentStats(long mills) {
+      if (trades == null || trades.isEmpty()) {
+        return null;
+      }
+      long t = System.currentTimeMillis() - mills;
+      long buyVols = 0;
+      long sellVols = 0;
+      int buyOrders = 0;
+      int sellOrders = 0;
+      for (int i = trades.size() - 1; i > 0; i --) {
+        BitmexPublicTrade trade = trades.get(i);
+        if (trade.getTime().getTime() >= t) {
+          long vol = trade.getSize().longValue();
+          if (trade.getSide() == BitmexSide.BUY) {
+            buyVols += vol;
+            buyOrders ++;
+          } else {
+            sellVols += vol;
+            sellOrders ++;
+          }
+        } else {
+          break;
+        }
+      }
+      if (buyVols == 0 && sellVols == 0) {
+        return null;
+      }
+      double volImbalance = (buyVols - sellVols) * 1.0d / (buyVols + sellVols);
+      double sideImbalance = (buyOrders - sellOrders) * 1.0d / (buyOrders + sellOrders);
+      return new Stats(buyVols, sellVols, buyOrders, sellOrders, volImbalance, sideImbalance);
+    }
+  }
+
+  @Data
+  public static class Stats {
+    private long buyVols;
+    private long sellVols;
+    private int buyOrders;
+    private int sellOrders;
+    private double volImbalance;
+    private double sideImbalance;
+
+    public Stats(long buyVols,
+                 long sellVols,
+                 int buyOrders,
+                 int sellOrders,
+                 double volImbalance,
+                 double sideImbalance) {
+      this.buyVols = buyVols;
+      this.sellVols = sellVols;
+      this.buyOrders = buyOrders;
+      this.sellOrders = sellOrders;
+      this.volImbalance = volImbalance;
+      this.sideImbalance = sideImbalance;
+    }
   }
 
   @Data

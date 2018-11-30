@@ -112,6 +112,26 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       if (this.leverage > 0) {
         this.exchange.setLeverage(symbol, leverage);
       }
+      while (true) {
+        try {
+          BitmexDeltaClient.OrderBookL2 orderBookL2 = deltaClient.getOrderBookL2(symbol);
+          double imbalance = orderBookL2.imbalance();
+          log.info("order book imbalance: {}", imbalance);
+          BitmexDeltaClient.OrderBookEntry ask = orderBookL2.getAsks().get(0);
+          log.info("LOB: ask: {}", ask);
+          BitmexDeltaClient.OrderBookEntry bid = orderBookL2.getBids().get(0);
+          log.info("LOB: bid: {}", bid);
+
+          BitmexDeltaClient.Trades trade = deltaClient.getTrade(symbol);
+          BitmexDeltaClient.Stats oneSecTradeStats = trade.recentStats(1000);
+          log.info("Recent 1s trade stats: {}", oneSecTradeStats);
+          BitmexDeltaClient.Stats fiveSecTradeStats = trade.recentStats(5000);
+          log.info("Recent 5s trade stats: {}", fiveSecTradeStats);
+        } catch (IOException ignore) {
+
+        }
+
+      }
     }
 
     private void execute() throws IOException {
