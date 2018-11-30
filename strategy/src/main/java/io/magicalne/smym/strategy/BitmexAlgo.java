@@ -164,13 +164,16 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             longFilled = true;
             log.info("Long order filled at {}. market stats: {}", longPrice, stats);
             if (shortOrderId == null) {
-              BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestAsk.getPrice(), contracts, BitmexSide.SELL);
+              double newAsk = Double.max(longPrice + TICK, bestAsk.getPrice());
+              BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, newAsk, contracts, BitmexSide.SELL);
               this.shortOrderId = order.getId();
-              this.shortPrice = bestAsk.getPrice();
+              this.shortPrice = newAsk;
               log.info("Place short order at {}.", shortPrice);
             }
           } else {
-            if ((mi < 2 && -IMBALANCE < mi || mav > bestBid.getSize()) && !longFilled) {
+            if ((longPrice < bestBid.getPrice() ||
+              (mi < 2 && -IMBALANCE < mi) ||
+              mav - bestBid.getSize() >= SIZE_THRESHOLD) && !longFilled) {
               // market sell taking the lead now, not good for long limit order.
               boolean cancel = exchange.cancel(longOrderId);
               if (cancel) {
@@ -195,9 +198,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (!shortFilled && shortOrder.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             shortFilled = true;
             log.info("Short order filled at {}. market stats: {}", shortPrice, stats);
-            this.shortOrderId = null;
+            if (longOrderId == null) {
+              double newBid = Double.min(shortPrice - TICK, bestBid.getPrice());
+              BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, newBid, contracts, BitmexSide.BUY);
+              this.longOrderId = order.getId();
+              this.longPrice = newBid;
+              log.info("Place long order at {}.", longPrice);
+            }
           } else {
-            if ((mi < 2 && mi > IMBALANCE || mbv > bestAsk.getSize()) && !shortFilled) {
+            if ((shortPrice > bestAsk.getPrice() ||
+              (mi < 2 && mi > IMBALANCE) ||
+              mbv - bestAsk.getSize() >= SIZE_THRESHOLD) && !shortFilled) {
               // market buy taking the lead now, not good for short limit order.
               boolean cancel = exchange.cancel(shortOrderId);
               if (cancel) {
