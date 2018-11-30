@@ -70,7 +70,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.01;
     private static final String STOP_LOSS_FROM = "STOP LOSS from ";
-    private static final int SIZE_THRESHOLD = 250000;
+    private static final int SIZE_THRESHOLD = 3       00000;
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
     private final int contracts;
@@ -171,16 +171,18 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               log.info("Place short order at {}.", shortPrice);
             }
           } else {
-            if ((longPrice < bestBid.getPrice() ||
-              (mi < 2 && -IMBALANCE < mi) ||
-              mav - bestBid.getSize() >= SIZE_THRESHOLD) && !longFilled) {
-              // market sell taking the lead now, not good for long limit order.
-              boolean cancel = exchange.cancel(longOrderId);
-              if (cancel) {
-                log.info("Cancel long order at {} due to too many market sell volumes.", longPrice);
-                this.longOrderId = null;
-              } else {
-                log.warn("Cancel long order failed.");
+            if (!longFilled && !shortFilled) {
+              if (longPrice < bestBid.getPrice() ||
+                (mi < 2 && mi < -IMBALANCE) ||
+                mav - bestBid.getSize() >= SIZE_THRESHOLD) {
+                // market sell taking the lead now, not good for long limit order.
+                boolean cancel = exchange.cancel(longOrderId);
+                if (cancel) {
+                  log.info("Cancel long order at {} due to too many market sell volumes.", longPrice);
+                  this.longOrderId = null;
+                } else {
+                  log.warn("Cancel long order failed.");
+                }
               }
             }
           }
@@ -206,16 +208,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               log.info("Place long order at {}.", longPrice);
             }
           } else {
-            if ((shortPrice > bestAsk.getPrice() ||
-              (mi < 2 && mi > IMBALANCE) ||
-              mbv - bestAsk.getSize() >= SIZE_THRESHOLD) && !shortFilled) {
-              // market buy taking the lead now, not good for short limit order.
-              boolean cancel = exchange.cancel(shortOrderId);
-              if (cancel) {
-                log.info("Cancel short order at {} due to too many market buy volumes.", shortPrice);
-                this.shortOrderId = null;
-              } else {
-                log.warn("Cancel short order failed.");
+            if (!longFilled && !shortFilled) {
+              if (shortPrice > bestAsk.getPrice() ||
+                (mi < 2 && mi > IMBALANCE) ||
+                mbv - bestAsk.getSize() >= SIZE_THRESHOLD) {
+                boolean cancel = exchange.cancel(shortOrderId);
+                if (cancel) {
+                  log.info("Cancel short order at {} due to too many market buy volumes.", shortPrice);
+                  this.shortOrderId = null;
+                } else {
+                  log.warn("Cancel short order failed.");
+                }
               }
             }
           }
