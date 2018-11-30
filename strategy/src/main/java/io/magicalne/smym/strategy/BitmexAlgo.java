@@ -88,6 +88,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private double lastMidPrice;
     private static final double TICK = 0.5;
     private static final double IMBALANCE = 0.3;
+    private boolean longFilled = false;
+    private boolean shortFilled = false;
 
     MarketMaker(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -156,16 +158,22 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (longOrderId != null) {
           BitmexPrivateOrder longOrder = deltaClient.getOrderById(symbol, longOrderId);
           if (longOrder.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
+            log.info("Long order filled at {}.", longPrice);
+            this.longOrderId = null;
+            longFilled = true;
+            if (shortFilled) {
+              longFilled = false;
+              shortFilled = false;
+              return;
+            }
             if (shortOrderId == null) {
               BitmexPrivateOrder order = exchange.placeLimitOrder(symbol, bestAsk.getPrice(), contracts, BitmexSide.SELL);
               this.shortOrderId = order.getId();
               this.shortPrice = bestAsk.getPrice();
               log.info("Place short order at {}.", shortPrice);
             }
-            log.info("Long order filled at {}.", longPrice);
-            this.longOrderId = null;
           } else {
-            if (mi < 2 && -IMBALANCE < mi) { // market sell taking the lead now, not good for long limit order.
+            if (mi < 2 && -IMBALANCE < mi && shortFilled) { // market sell taking the lead now, not good for long limit order.
               boolean cancel = exchange.cancel(longOrderId);
               if (cancel) {
                 log.info("Cancel long order at {} due to too many market sell volumes.", longPrice);
@@ -189,6 +197,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (shortOrder.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             log.info("Short order filled at {}.", shortPrice);
             this.shortOrderId = null;
+            shortFilled = true;
+            if (longFilled) {
+              shortFilled = false;
+              longFilled = false;
+            }
           } else {
             if (mi < 2 && mi > IMBALANCE) { // market buy taking the lead now, not good for short limit order.
               boolean cancel = exchange.cancel(shortOrderId);
