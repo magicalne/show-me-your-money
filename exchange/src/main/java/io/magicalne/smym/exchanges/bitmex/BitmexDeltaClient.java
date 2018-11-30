@@ -5,9 +5,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.threetenbp.ThreeTenModule;
 import com.google.common.base.Preconditions;
-import io.swagger.client.model.Order;
 import lombok.Data;
 import okhttp3.*;
+import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPublicTrade;
 import org.knowm.xchange.bitmex.dto.trade.BitmexSide;
 
@@ -18,9 +18,6 @@ import java.util.Comparator;
 import java.util.List;
 
 public class BitmexDeltaClient {
-
-  private static final String BUY = "Buy";
-  private static final String SELL = "Sell";
 
   private final String baseUrl;
   private final OkHttpClient client;
@@ -34,18 +31,18 @@ public class BitmexDeltaClient {
       .registerModule(new ThreeTenModule());
   }
 
-  public Order getOrderById(String symbol, String orderId) throws BitmexQueryOrderException, IOException {
+  public BitmexPrivateOrder getOrderById(String symbol, String orderId) throws BitmexQueryOrderException, IOException {
     Request req = new Request.Builder().url(baseUrl + "/order?symbol=" + symbol).get().build();
     Call call = client.newCall(req);
     try (Response res = call.execute()) {
       if (res.isSuccessful()) {
         ResponseBody body = res.body();
         Preconditions.checkNotNull(body);
-        TypeReference<List<Order>> ref = new TypeReference<List<Order>>() {
+        TypeReference<List<BitmexPrivateOrder>> ref = new TypeReference<List<BitmexPrivateOrder>>() {
         };
-        List<Order> orders = objectMapper.readValue(body.string(), ref);
-        for (Order order : orders) {
-          if (order.getOrderID().equals(orderId)) {
+        List<BitmexPrivateOrder> orders = objectMapper.readValue(body.string(), ref);
+        for (BitmexPrivateOrder order : orders) {
+          if (order.getId().equals(orderId)) {
             return order;
           }
         }
@@ -68,7 +65,7 @@ public class BitmexDeltaClient {
         List<OrderBookEntry> asks = new ArrayList<>();
         List<OrderBookEntry> bids = new ArrayList<>();
         for (OrderBookEntry entry : entries) {
-          if (BUY.equals(entry.getSide())) {
+          if (entry.getSide() == BitmexSide.BUY) {
             bids.add(entry);
           } else {
             asks.add(entry);
@@ -173,12 +170,12 @@ public class BitmexDeltaClient {
       this.bids = bids;
     }
 
-    public double getBestBid() {
-      return bids.get(0).getPrice();
+    public OrderBookEntry getBestBid() {
+      return bids.get(0);
     }
 
-    public double getBestAsk() {
-      return asks.get(0).getPrice();
+    public OrderBookEntry getBestAsk() {
+      return asks.get(0);
     }
 
     public double imbalance() {
@@ -191,9 +188,9 @@ public class BitmexDeltaClient {
       long bidVol = bids.get(0).getSize();
       long askVol = asks.get(0).getSize();
       if (bidVol >= askVol) {
-        return getBestBid();
+        return getBestBid().getPrice();
       } else {
-        double finalBid = getBestBid();
+        double finalBid = getBestBid().getPrice();
         for (OrderBookEntry e : bids) {
           askVol -= e.getSize();
           if (askVol < 0) {
@@ -209,9 +206,9 @@ public class BitmexDeltaClient {
       long bidVol = bids.get(0).getSize();
       long askVol = asks.get(0).getSize();
       if (bidVol <= askVol) {
-        return getBestAsk();
+        return getBestAsk().getPrice();
       } else {
-        double finalAsk = getBestAsk();
+        double finalAsk = getBestAsk().getPrice();
         for (OrderBookEntry e : asks) {
           bidVol -= e.getSize();
           if (bidVol < 0) {
@@ -228,7 +225,7 @@ public class BitmexDeltaClient {
   public static class OrderBookEntry {
     private String symbol;
     private long id ;
-    private String side; //Sell or Buy
+    private BitmexSide side; //Sell or Buy
     private long size;
     private double price;
   }
