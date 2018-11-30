@@ -127,8 +127,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           log.info("Recent 1s trade stats: {}", oneSecTradeStats);
           BitmexDeltaClient.Stats fiveSecTradeStats = trade.recentStats(5000);
           log.info("Recent 5s trade stats: {}", fiveSecTradeStats);
-        } catch (IOException ignore) {
-
+        } catch (IOException e) {
+          log.error("exception: ", e);
         }
 
       }
