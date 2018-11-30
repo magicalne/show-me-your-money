@@ -70,7 +70,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.01;
     private static final String STOP_LOSS_FROM = "STOP LOSS from ";
-    private static final int SIZE_THRESHOLD = 3       00000;
+    private static final int SIZE_THRESHOLD = 300000;
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
     private final int contracts;
