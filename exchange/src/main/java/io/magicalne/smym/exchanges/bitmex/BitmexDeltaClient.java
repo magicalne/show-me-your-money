@@ -89,7 +89,9 @@ public class BitmexDeltaClient {
       if (res.isSuccessful()) {
         ResponseBody body = res.body();
         Preconditions.checkNotNull(body);
-        return objectMapper.readValue(body.string(), Trades.class);
+        TypeReference<List<BitmexPublicTrade>> ref = new TypeReference<List<BitmexPublicTrade>>() {};
+        List<BitmexPublicTrade> trades = objectMapper.readValue(body.string(), ref);
+        return new Trades(trades);
       }
     }
 
@@ -99,6 +101,10 @@ public class BitmexDeltaClient {
   @Data
   public static class Trades {
     private List<BitmexPublicTrade> trades;
+
+    public Trades(List<BitmexPublicTrade> trades) {
+      this.trades = trades;
+    }
 
     public Stats recentStats(long mills) {
       if (trades == null || trades.isEmpty()) {
