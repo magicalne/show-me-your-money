@@ -129,6 +129,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.Trades trade = deltaClient.getTrade(symbol);
       BitmexDeltaClient.Stats stats = trade.recentStats(5000);
       double mi = stats == null ? 3 : stats.getVolImbalance();
+      long mbv = stats == null ? Long.MAX_VALUE : stats.getBuyVols();
+      long mav = stats == null ? Long.MAX_VALUE : stats.getSellVols();
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
       BitmexDeltaClient.OrderBookEntry bestBid = ob.getBestBid();
       BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
@@ -168,7 +170,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               log.info("Place short order at {}.", shortPrice);
             }
           } else {
-            if (mi < 2 && -IMBALANCE < mi && !shortFilled) { // market sell taking the lead now, not good for long limit order.
+            if ((mi < 2 && -IMBALANCE < mi || mav > bestBid.getSize()) && !longFilled) {
+              // market sell taking the lead now, not good for long limit order.
               boolean cancel = exchange.cancel(longOrderId);
               if (cancel) {
                 log.info("Cancel long order at {} due to too many market sell volumes.", longPrice);
@@ -194,7 +197,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Short order filled at {}. market stats: {}", shortPrice, stats);
             this.shortOrderId = null;
           } else {
-            if (mi < 2 && mi > IMBALANCE && !longFilled) { // market buy taking the lead now, not good for short limit order.
+            if ((mi < 2 && mi > IMBALANCE || mbv > bestAsk.getSize()) && !shortFilled) {
+              // market buy taking the lead now, not good for short limit order.
               boolean cancel = exchange.cancel(shortOrderId);
               if (cancel) {
                 log.info("Cancel short order at {} due to too many market buy volumes.", shortPrice);
@@ -216,6 +220,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       if (longFilled && shortFilled) {
         longFilled = false;
         shortFilled = false;
+        longOrderId = null;
+        shortOrderId = null;
       }
     }
 
