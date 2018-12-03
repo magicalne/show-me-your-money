@@ -170,8 +170,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (longOrderId != null) {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, longOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
-            profit += contracts/order.getPrice().doubleValue()*(1+ REBATE);
-            log.info("Limit bid filled at {}, profit: {}", longPrice, profit);
+            profit += contracts/order.getPrice().doubleValue()*(1+REBATE);
+            log.info("Limit bid filled at {}, profit: {}", order.getPrice(), profit);
             this.longOrderId = null;
           } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
@@ -182,7 +182,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Cancel ask order: {}", cancel);
             if (cancel) {
               order = exchange.placeMarketOrder(symbol, contracts, BitmexSide.BUY);
-              profit += contracts/order.getPrice().doubleValue()*(1+ REBATE);
+              profit += contracts/order.getPrice().doubleValue()*(1-FEE);
               log.warn("Market reverse! Market buy at {}, profit: {}", order.getPrice(), profit);
               this.longOrderId = null;
             }
@@ -191,7 +191,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             profit -= contracts/order.getPrice().doubleValue()*(1-REBATE);
-            log.info("Limit ask order filled at {}, profit: {}", shortPrice, profit);
+            log.info("Limit ask order filled at {}, profit: {}", order.getPrice(), profit);
             this.shortOrderId = null;
           } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.SELL);
@@ -202,7 +202,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Cancel ask order: {}", cancel);
             if (cancel) {
               order = exchange.placeMarketOrder(symbol, contracts, BitmexSide.SELL);
-              profit -= contracts/order.getPrice().doubleValue()*(1-REBATE);
+              profit -= contracts/order.getPrice().doubleValue()*(1+FEE);
               log.warn("Market reverse! Market sell at {}, profit: {}", order.getPrice(), profit);
               this.shortOrderId = null;
             }
