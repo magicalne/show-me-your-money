@@ -88,7 +88,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private long createAt;
     private double lastMidPrice;
     private static final double TICK = 0.5;
-    private static final double IMBALANCE = 0.85;
+    private static final double IMBALANCE = 0.65;
     private boolean longFilled = false;
     private boolean shortFilled = false;
 
@@ -133,7 +133,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
 
       if (longOrderId == null && shortOrderId == null) {
-        final int obLvl = 8;
+        final int obLvl = 6;
         Pressure pressure = calculatePressure(ob, obLvl);
         log.info("pressure: {}", pressure);
         if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
