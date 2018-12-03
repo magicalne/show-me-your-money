@@ -177,7 +177,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
             longOrderId = order.getId();
             log.info("Replace limit bid order at {}. status: {}", order.getPrice(), order.getOrderStatus());
-          } else if (stats != null && stats.getVolImbalance() > IMBALANCE && bestAsk.getSize() <= SIZE_THRESHOLD) {
+          } /*else if (stats != null && stats.getVolImbalance() > IMBALANCE && bestAsk.getSize() <= SIZE_THRESHOLD) {
             boolean cancel = exchange.cancel(longOrderId);
             log.info("Cancel ask order: {}", cancel);
             if (cancel) {
@@ -186,7 +186,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               log.warn("Market reverse! Market buy at {}, profit: {}", order.getPrice(), profit);
               this.longOrderId = null;
             }
-          }
+          }*/
         } else {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
@@ -197,7 +197,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.SELL);
             shortOrderId = order.getId();
             log.info("Replace limit ask order at {}. status: {}", order.getPrice(), order.getOrderStatus());
-          } else if (stats != null && stats.getVolImbalance() < -IMBALANCE && bestBid.getSize() <= SIZE_THRESHOLD) {
+          } /*else if (stats != null && stats.getVolImbalance() < -IMBALANCE && bestBid.getSize() <= SIZE_THRESHOLD) {
             boolean cancel = exchange.cancel(shortOrderId);
             log.info("Cancel ask order: {}", cancel);
             if (cancel) {
@@ -206,7 +206,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               log.warn("Market reverse! Market sell at {}, profit: {}", order.getPrice(), profit);
               this.shortOrderId = null;
             }
-          }
+          }*/
         }
       }
     }
