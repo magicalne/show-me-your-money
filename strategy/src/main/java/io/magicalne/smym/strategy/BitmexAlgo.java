@@ -88,7 +88,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private long createAt;
     private double lastMidPrice;
     private static final double TICK = 0.5;
-    private static final double IMBALANCE = 0.5;
+    private static final double IMBALANCE = 0.55;
     private boolean longFilled = false;
     private boolean shortFilled = false;
 
@@ -133,27 +133,26 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
 
       if (longOrderId == null && shortOrderId == null) {
-        final int obLvl = 5;
+        final int obLvl = 4;
         Pressure pressure = calculatePressure(ob, obLvl);
-        log.info("pressure: {}", pressure);
         if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() < -IMBALANCE) {
+          longPrice = bestBid.getPrice() * (1 - FEE);
+          profit -= contracts / bestBid.getPrice() * (1 + FEE);
+          log.info("Market sell at price: {}, profit: {}", bestBid, profit);
+          log.info("Place limit buy at price: {}.", longPrice);
+          longOrderId = "limit buy";
+        } else if (pressure.getAsk() == obLvl && bestAsk.getSize() <= SIZE_THRESHOLD
+          && stats != null && stats.getVolImbalance() > IMBALANCE) {
           shortPrice = bestAsk.getPrice() * (1 + FEE);
-          profit -= contracts / shortPrice;
+          profit += contracts / bestAsk.getPrice() * (1 - FEE);
           log.info("Market buy at price: {}, profit: {]", bestAsk, profit);
           log.info("Place limit sell at price: {}.", shortPrice);
           shortOrderId = "limit sell";
-        } else if (pressure.getAsk() == obLvl && bestAsk.getSize() <= SIZE_THRESHOLD
-          && stats != null && stats.getVolImbalance() > IMBALANCE) {
-          longPrice = bestBid.getPrice() * (1 - FEE);
-          profit += contracts / longPrice;
-          log.info("Market sell at price: {}, profit: {]", bestBid, profit);
-          log.info("Place limit buy at price: {}.", longPrice);
-          longOrderId = "limit buy";
         }
       } else {
         if (longOrderId != null) {
-          if (bestBid.getPrice() < longPrice) {
+          if (bestBid.getPrice() > longPrice) {
             profit += contracts/longPrice*(1+REBATE);
             log.info("Limit bid filled at {}, profit: {}", longPrice, profit);
             this.longOrderId = null;
@@ -163,7 +162,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             this.longOrderId = null;
           }
         } else {
-          if (bestAsk.getPrice() > shortPrice) {
+          if (bestAsk.getPrice() < shortPrice) {
             profit -= contracts/shortPrice*(1-REBATE);
             log.info("Limit ask order filled at {}, profit: {}", shortPrice, profit);
             this.shortOrderId = null;
