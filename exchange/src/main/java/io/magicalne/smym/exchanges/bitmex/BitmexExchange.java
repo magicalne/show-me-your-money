@@ -8,7 +8,6 @@ import org.knowm.xchange.bitmex.dto.trade.*;
 import org.knowm.xchange.bitmex.service.BitmexTradeService;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -41,7 +40,7 @@ public class BitmexExchange {
     return this.tradeService.placeOrder(param);
   }
 
-  public BitmexPrivateOrder placeMarketLongOrder(String symbol, int contracts, BitmexSide side) {
+  public BitmexPrivateOrder placeMarketOrder(String symbol, int contracts, BitmexSide side) {
     BitmexPlaceOrderParameters param = new BitmexPlaceOrderParameters.Builder(symbol)
       .setSide(side)
       .setOrderQuantity(new BigDecimal(contracts))
@@ -72,19 +71,7 @@ public class BitmexExchange {
     return this.tradeService.placeOrderBulk(commands);
   }
 
-  public List<BitmexPrivateOrder> placeOrdersBulk(String symbol, BitmexSide side, List<Double> bidPrices,
-                                                  List<Integer> contracts) {
-    List<PlaceOrderCommand> commands = new ArrayList<>(bidPrices.size());
-    for (int i = 0; i < bidPrices.size(); i ++) {
-      BitmexPlaceOrderParameters param = new BitmexPlaceOrderParameters.Builder(symbol)
-        .setSide(side)
-        .setPrice(new BigDecimal(bidPrices.get(i)))
-        .setOrderQuantity(new BigDecimal(contracts.get(i)))
-        .setOrderType(BitmexOrderType.LIMIT)
-        .build();
-      PlaceOrderCommand command = new PlaceOrderCommand(param);
-      commands.add(command);
-    }
+  public List<BitmexPrivateOrder> placeOrdersBulk(List<PlaceOrderCommand> commands) {
     return this.tradeService.placeOrderBulk(commands);
   }
 
