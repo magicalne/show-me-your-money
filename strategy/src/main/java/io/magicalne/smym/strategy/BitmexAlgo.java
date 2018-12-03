@@ -139,7 +139,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
 
       if (longOrderId == null && shortOrderId == null) {
-        final int obLvl = 4;
+        final int obLvl = 5;
         Pressure pressure = calculatePressure(ob, obLvl);
         if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() < -IMBALANCE) {
