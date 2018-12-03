@@ -129,14 +129,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.Stats stats = trade.recentStats(5000);
 
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
-      List<BitmexDeltaClient.OrderBookEntry> bids = ob.getBids();
-      List<BitmexDeltaClient.OrderBookEntry> asks = ob.getAsks();
       BitmexDeltaClient.OrderBookEntry bestBid = ob.getBestBid();
       BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
 
       if (longOrderId == null && shortOrderId == null) {
         final int obLvl = 8;
         Pressure pressure = calculatePressure(ob, obLvl);
+        log.info("pressure: {}", pressure);
         if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() < -IMBALANCE) {
           shortPrice = bestAsk.getPrice() * (1 + FEE);
