@@ -134,7 +134,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private void placeOrders() throws IOException, BitmexQueryOrderException {
       BitmexDeltaClient.Trades trade = deltaClient.getTrade(symbol);
-      BitmexDeltaClient.Stats stats = trade.recentStats(5000);
+      BitmexDeltaClient.Stats stats = trade.recentStats(10000);
 
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
       BitmexDeltaClient.OrderBookEntry bestBid = ob.getBestBid();
