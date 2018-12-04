@@ -95,7 +95,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private boolean shortFilled = false;
 
     private double profit = 0;
-    public static final double SPREED = 0.001;
+    public static final double SPREED = 0.002;
 
     Momentum(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
