@@ -90,7 +90,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private long createAt;
     private double lastMidPrice;
     private static final double TICK = 0.5;
-    private static final double IMBALANCE = 0.6;
+    private static final double OB_IMBALANCE = 0.6;
+    private static final double MARKET_IMBALANCE = 0.8;
     private boolean longFilled = false;
     private boolean shortFilled = false;
 
@@ -143,7 +144,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         final int obLvl = 5;
         Pressure pressure = calculatePressure(ob, obLvl);
         if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
-          && stats != null && stats.getVolImbalance() < -IMBALANCE) {
+          && stats != null && stats.getVolImbalance() < -MARKET_IMBALANCE) {
           double bidPrice = getRoundPrice(bestBid.getPrice(), (1 - SPREED));
           List<BitmexPrivateOrder> marketAndLimit =
             marketAndLimit(BitmexSide.SELL, BitmexSide.BUY, bidPrice);
@@ -156,7 +157,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           log.info("Place limit buy at price: {}. status: {}", limitOrder.getPrice(), limitOrder.getOrderStatus());
           longOrderId = limitOrder.getId();
         } else if (pressure.getAsk() == obLvl && bestAsk.getSize() <= SIZE_THRESHOLD
-          && stats != null && stats.getVolImbalance() > IMBALANCE) {
+          && stats != null && stats.getVolImbalance() > MARKET_IMBALANCE) {
           double askPrice = getRoundPrice(bestAsk.getPrice(), (1 + SPREED));
           List<BitmexPrivateOrder> marketAndLimit =
             marketAndLimit(BitmexSide.BUY, BitmexSide.SELL, askPrice);
@@ -180,7 +181,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
             longOrderId = order.getId();
             log.info("Replace limit bid order at {}. status: {}", order.getPrice(), order.getOrderStatus());
-          } /*else if (stats != null && stats.getVolImbalance() > IMBALANCE && bestAsk.getSize() <= SIZE_THRESHOLD) {
+          } /*else if (stats != null && stats.getVolImbalance() > OB_IMBALANCE && bestAsk.getSize() <= SIZE_THRESHOLD) {
             boolean cancel = exchange.cancel(longOrderId);
             log.info("Cancel ask order: {}", cancel);
             if (cancel) {
@@ -200,7 +201,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.SELL);
             shortOrderId = order.getId();
             log.info("Replace limit ask order at {}. status: {}", order.getPrice(), order.getOrderStatus());
-          } /*else if (stats != null && stats.getVolImbalance() < -IMBALANCE && bestBid.getSize() <= SIZE_THRESHOLD) {
+          } /*else if (stats != null && stats.getVolImbalance() < -OB_IMBALANCE && bestBid.getSize() <= SIZE_THRESHOLD) {
             boolean cancel = exchange.cancel(shortOrderId);
             log.info("Cancel ask order: {}", cancel);
             if (cancel) {
@@ -256,9 +257,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         BitmexDeltaClient.OrderBookEntry bid = ob.getBids().get(i);
         BitmexDeltaClient.OrderBookEntry ask = ob.getAsks().get(i);
         double imbalance = (bid.getSize() - ask.getSize()) * 1.0d / (bid.getSize() + ask.getSize());
-        if (imbalance < -IMBALANCE) {
+        if (imbalance < -OB_IMBALANCE) {
           bidPressure++;
-        } else if (imbalance > IMBALANCE) {
+        } else if (imbalance > OB_IMBALANCE) {
           askPressure++;
         } else {
           break;
