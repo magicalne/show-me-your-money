@@ -90,8 +90,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private long createAt;
     private double lastMidPrice;
     private static final double TICK = 0.5;
-    private static final double OB_IMBALANCE = 0.6;
-    private static final double MARKET_IMBALANCE = 0.8;
+    private static final double OB_IMBALANCE = 0.55;
+    private static final double MARKET_IMBALANCE = 0.7;
     private boolean longFilled = false;
     private boolean shortFilled = false;
 
