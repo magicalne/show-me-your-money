@@ -95,6 +95,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private boolean shortFilled = false;
 
     private double profit = 0;
+    public static final double SPREED = 0.001;
 
     Momentum(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -143,8 +144,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         Pressure pressure = calculatePressure(ob, obLvl);
         if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() < -IMBALANCE) {
+          double bidPrice = getRoundPrice(bestBid.getPrice());
           List<BitmexPrivateOrder> marketAndLimit =
-            marketAndLimit(BitmexSide.SELL, BitmexSide.BUY, Math.round(bestBid.getPrice() * (1 - FEE)));
+            marketAndLimit(BitmexSide.SELL, BitmexSide.BUY, bidPrice);
           BitmexPrivateOrder marketOrder = marketAndLimit.get(0);
           shortPrice = marketOrder.getPrice().doubleValue();
           profit -= contracts/shortPrice*(1+FEE);
@@ -155,8 +157,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           longOrderId = limitOrder.getId();
         } else if (pressure.getAsk() == obLvl && bestAsk.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() > IMBALANCE) {
+          double askPrice = getRoundPrice(bestAsk.getPrice());
           List<BitmexPrivateOrder> marketAndLimit =
-            marketAndLimit(BitmexSide.BUY, BitmexSide.SELL, Math.round(bestAsk.getPrice() * (1 + FEE)));
+            marketAndLimit(BitmexSide.BUY, BitmexSide.SELL, askPrice);
           BitmexPrivateOrder marketOrder = marketAndLimit.get(0);
           longPrice = marketOrder.getPrice().doubleValue();
           profit += contracts/longPrice*(1-FEE);
@@ -209,6 +212,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }*/
         }
       }
+    }
+
+    private double getRoundPrice(double price) {
+      double roundPrice = price * (1 - SPREED);
+      double round = Math.round(roundPrice);
+      if (roundPrice < round) {
+        roundPrice = round;
+      } else {
+        roundPrice = round + TICK;
+      }
+      return roundPrice;
     }
 
     private List<BitmexPrivateOrder> marketAndLimit(BitmexSide marketSide, BitmexSide limitSide, double limitPrice) {
