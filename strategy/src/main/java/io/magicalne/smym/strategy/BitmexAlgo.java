@@ -91,7 +91,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private double lastMidPrice;
     private static final double TICK = 0.5;
     private static final double OB_IMBALANCE = 0.55;
-    private static final double MARKET_IMBALANCE = 0.7;
+    private static final double MARKET_IMBALANCE = 0.8;
     private boolean longFilled = false;
     private boolean shortFilled = false;
 
@@ -141,9 +141,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
 
       if (longOrderId == null && shortOrderId == null) {
-        final int obLvl = 5;
-        Pressure pressure = calculatePressure(ob, obLvl);
-        if (pressure.getBid() == obLvl && bestBid.getSize() <= SIZE_THRESHOLD
+//        final int obLvl = 5;
+//        Pressure pressure = calculatePressure(ob, obLvl);
+        if (bestBid.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() < -MARKET_IMBALANCE) {
           double bidPrice = getRoundPrice(bestBid.getPrice(), (1 - SPREED));
           List<BitmexPrivateOrder> marketAndLimit =
@@ -156,7 +156,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           log.info("Market sell at price: {}, profit: {}", shortPrice, profit);
           log.info("Place limit buy at price: {}. status: {}", limitOrder.getPrice(), limitOrder.getOrderStatus());
           longOrderId = limitOrder.getId();
-        } else if (pressure.getAsk() == obLvl && bestAsk.getSize() <= SIZE_THRESHOLD
+        } else if (bestAsk.getSize() <= SIZE_THRESHOLD
           && stats != null && stats.getVolImbalance() > MARKET_IMBALANCE) {
           double askPrice = getRoundPrice(bestAsk.getPrice(), (1 + SPREED));
           List<BitmexPrivateOrder> marketAndLimit =
