@@ -23,6 +23,7 @@ import javax.xml.bind.JAXBException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,15 +45,14 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
   public void execute(){
     List<AlgoTrading> algoTradings = config.getAlgoTradings();
-    List<Momentum> list = new LinkedList<>();
+    List<MarketMaker> list = new LinkedList<>();
     for (AlgoTrading a : algoTradings) {
-      Momentum afp = new Momentum(config.getDeltaHost(), config.getDeltaPort(), a, exchange);
-      afp.setup();
+      MarketMaker afp = new MarketMaker(config.getDeltaHost(), config.getDeltaPort(), a, exchange);
       list.add(afp);
     }
 
     for (;;) {
-      for (Momentum ofp : list) {
+      for (MarketMaker ofp : list) {
         try {
           ofp.execute();
         } catch (ExchangeException e) {
@@ -66,12 +66,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
   }
 
   @Slf4j
-  public static class Momentum {
+  public static class MarketMaker {
 
     private static final int TIMEOUT = 60*60*1000; //1 hour
     private static final double STOP_LOSS = 0.01;
     private static final String STOP_LOSS_FROM = "STOP LOSS from ";
-    private static final int SIZE_THRESHOLD = 80000;
     private static final double FEE = 0.00075;
     private static final double REBATE = 0.00025;
     private final BitmexDeltaClient deltaClient;
@@ -80,32 +79,20 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private final double leverage;
     private final BitmexExchange exchange;
     private final CurrencyPair currencyPair;
-    private final double imbalance;
-    private final int count;
     private final List<OrderHistory> waitings = new ArrayList<>();
     private String longOrderId;
     private String shortOrderId;
     private double longPrice;
     private double shortPrice;
-    private long createAt;
-    private double lastMidPrice;
     private static final double TICK = 0.5;
-    private static final double OB_IMBALANCE = 0.55;
-    private static final double MARKET_IMBALANCE = 0.8;
-    private boolean longFilled = false;
-    private boolean shortFilled = false;
+    private static final double IMBALANCE = 0.3;
 
-    private double profit = 0;
-    public static final double SPREED = 0.002;
-
-    Momentum(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
+    MarketMaker(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
       currencyPair = new CurrencyPair(config.getSymbol());
       this.symbol = this.currencyPair.base.getCurrencyCode() + this.currencyPair.counter.getCurrencyCode();
       this.contracts = config.getContracts();
       this.leverage = config.getLeverage();
-      this.imbalance = config.getImbalance();
-      this.count = config.getCount();
       this.exchange = exchange;
     }
 
@@ -118,12 +105,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       }
     }
 
-    private void setup() {
-      if (this.leverage > 0) {
-        this.exchange.setLeverage(symbol, leverage);
-      }
-    }
-
     private void execute() throws IOException {
       try {
         placeOrders();
@@ -133,86 +114,75 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private void placeOrders() throws IOException, BitmexQueryOrderException {
-      BitmexDeltaClient.Trades trade = deltaClient.getTrade(symbol);
-      BitmexDeltaClient.Stats stats = trade.recentStats(10000);
-
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
-      BitmexDeltaClient.OrderBookEntry bestBid = ob.getBestBid();
-      BitmexDeltaClient.OrderBookEntry bestAsk = ob.getBestAsk();
+      double imbalance = ob.imbalance();
+      double bestBid = ob.getBestBid().getPrice();
+      double bestAsk = ob.getBestAsk().getPrice();
 
       if (longOrderId == null && shortOrderId == null) {
-//        final int obLvl = 5;
-//        Pressure pressure = calculatePressure(ob, obLvl);
-        if (bestBid.getSize() <= SIZE_THRESHOLD
-          && stats != null && stats.getVolImbalance() < -MARKET_IMBALANCE) {
-          double bidPrice = getRoundPrice(bestBid.getPrice(), (1 - SPREED));
-          List<BitmexPrivateOrder> marketAndLimit =
-            marketAndLimit(BitmexSide.SELL, BitmexSide.BUY, bidPrice);
-          BitmexPrivateOrder marketOrder = marketAndLimit.get(0);
-          shortPrice = marketOrder.getPrice().doubleValue();
-          profit -= contracts/shortPrice*(1+FEE);
-
-          BitmexPrivateOrder limitOrder = marketAndLimit.get(1);
-          log.info("Market sell at price: {}, profit: {}", shortPrice, profit);
-          log.info("Place limit buy at price: {}. status: {}", limitOrder.getPrice(), limitOrder.getOrderStatus());
-          longOrderId = limitOrder.getId();
-        } else if (bestAsk.getSize() <= SIZE_THRESHOLD
-          && stats != null && stats.getVolImbalance() > MARKET_IMBALANCE) {
-          double askPrice = getRoundPrice(bestAsk.getPrice(), (1 + SPREED));
-          List<BitmexPrivateOrder> marketAndLimit =
-            marketAndLimit(BitmexSide.BUY, BitmexSide.SELL, askPrice);
-          BitmexPrivateOrder marketOrder = marketAndLimit.get(0);
-          longPrice = marketOrder.getPrice().doubleValue();
-          profit += contracts/longPrice*(1-FEE);
-
-          BitmexPrivateOrder limitOrder = marketAndLimit.get(1);
-          log.info("Market buy at price: {}, profit: {}", longPrice, profit);
-          log.info("Place limit sell at price: {}. status: {}", limitOrder.getPrice(), limitOrder.getOrderStatus());
-          shortOrderId = limitOrder.getId();
+        if (imbalance < -IMBALANCE) {
+          exchange.setLeverage(symbol, leverage);
+          log.info("Set leverage to {}.", leverage);
+          this.longPrice = bestBid;
+          BitmexPrivateOrder bidOrder = exchange.placeLimitOrder(symbol, longPrice, contracts, BitmexSide.BUY);
+          log.info("Place limit bid order at {}.", longPrice);
+          this.longOrderId = bidOrder.getId();
+        } else if (imbalance > IMBALANCE) {
+          exchange.setLeverage(symbol, leverage);
+          log.info("Set leverage to {}.", leverage);
+          this.shortPrice = bestAsk;
+          BitmexPrivateOrder askOrder = exchange.placeLimitOrder(symbol, shortPrice, contracts, BitmexSide.SELL);
+          log.info("Place limit short order at {}.", shortPrice);
+          this.shortOrderId = askOrder.getId();
         }
       } else {
         if (longOrderId != null) {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, longOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
-            profit += contracts/order.getPrice().doubleValue()*(1+REBATE);
-            log.info("Limit bid filled at {}, profit: {}", order.getPrice(), profit);
-            this.longOrderId = null;
-          } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
-            order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.BUY);
-            longOrderId = order.getId();
-            log.info("Replace limit bid order at {}. status: {}", order.getPrice(), order.getOrderStatus());
-          } /*else if (stats != null && stats.getVolImbalance() > OB_IMBALANCE && bestAsk.getSize() <= SIZE_THRESHOLD) {
-            boolean cancel = exchange.cancel(longOrderId);
-            log.info("Cancel ask order: {}", cancel);
-            if (cancel) {
-              order = exchange.placeMarketOrder(symbol, contracts, BitmexSide.BUY);
-              profit += contracts/order.getPrice().doubleValue()*(1-FEE);
-              log.warn("Market reverse! Market buy at {}, profit: {}", order.getPrice(), profit);
+            if (imbalance > IMBALANCE && shortOrderId == null) {
+              log.info("Bid order filled.");
+              double l = calculateLeverage(longPrice, bestAsk);
+              exchange.setLeverage(symbol, l);
+              log.info("Set leverage to {}.", l);
+              this.shortPrice = bestAsk;
+              BitmexPrivateOrder askOrder = exchange.placeLimitOrder(symbol, shortPrice, contracts, BitmexSide.SELL);
+              log.info("Place limit short order at {}.", shortPrice);
+              this.shortOrderId = askOrder.getId();
               this.longOrderId = null;
             }
-          }*/
+          } else if (Double.compare(bestBid, longPrice) > 0) {
+            boolean cancel = exchange.cancel(longOrderId);
+            log.info("cancel long order {}", cancel);
+            this.longOrderId = null;
+          }
         } else {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
-            profit -= contracts/order.getPrice().doubleValue()*(1-REBATE);
-            log.info("Limit ask order filled at {}, profit: {}", order.getPrice(), profit);
-            this.shortOrderId = null;
-          } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
-            order = exchange.placeLimitOrder(symbol, bestBid.getPrice(), contracts, BitmexSide.SELL);
-            shortOrderId = order.getId();
-            log.info("Replace limit ask order at {}. status: {}", order.getPrice(), order.getOrderStatus());
-          } /*else if (stats != null && stats.getVolImbalance() < -OB_IMBALANCE && bestBid.getSize() <= SIZE_THRESHOLD) {
-            boolean cancel = exchange.cancel(shortOrderId);
-            log.info("Cancel ask order: {}", cancel);
-            if (cancel) {
-              order = exchange.placeMarketOrder(symbol, contracts, BitmexSide.SELL);
-              profit -= contracts/order.getPrice().doubleValue()*(1+FEE);
-              log.warn("Market reverse! Market sell at {}, profit: {}", order.getPrice(), profit);
+            if (imbalance < -IMBALANCE && longOrderId == null) {
+              log.info("Ask order filled.");
+              double l = calculateLeverage(longPrice, bestAsk);
+              exchange.setLeverage(symbol, l);
+              log.info("Set leverage to {}.", l);
+              this.longPrice = bestBid;
+              BitmexPrivateOrder bidOrder = exchange.placeLimitOrder(symbol, longPrice, contracts, BitmexSide.BUY);
+              log.info("Place limit bid order at {}.", longPrice);
+              this.longOrderId = bidOrder.getId();
               this.shortOrderId = null;
             }
-          }*/
+          } else if (Double.compare(bestAsk, shortPrice) < 0) {
+            boolean cancel = exchange.cancel(shortOrderId);
+            log.info("cancel short order {}", cancel);
+            this.shortOrderId = null;
+          }
         }
       }
+    }
+
+    private double calculateLeverage(double tradePrice, double newPrice) {
+      return new BigDecimal(tradePrice * leverage)
+        .divide(new BigDecimal(newPrice), RoundingMode.HALF_EVEN)
+        .setScale(2, RoundingMode.HALF_EVEN)
+        .doubleValue();
     }
 
     private double getRoundPrice(double price, double spreed) {
@@ -248,36 +218,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
 
     private void stopLoss() {
 
-    }
-
-    private Pressure calculatePressure(BitmexDeltaClient.OrderBookL2 ob, int obLvl) {
-      int bidPressure = 0;
-      int askPressure = 0;
-      for (int i = 0; i < obLvl; i++) {
-        BitmexDeltaClient.OrderBookEntry bid = ob.getBids().get(i);
-        BitmexDeltaClient.OrderBookEntry ask = ob.getAsks().get(i);
-        double imbalance = (bid.getSize() - ask.getSize()) * 1.0d / (bid.getSize() + ask.getSize());
-        if (imbalance < -OB_IMBALANCE) {
-          bidPressure++;
-        } else if (imbalance > OB_IMBALANCE) {
-          askPressure++;
-        } else {
-          break;
-        }
-      }
-
-      return new Pressure(bidPressure, askPressure);
-    }
-
-    @Data
-    private static class Pressure {
-      private final int bid;
-      private final int ask;
-
-      public Pressure(int bid, int ask) {
-        this.bid = bid;
-        this.ask = ask;
-      }
     }
 
     private BitmexPrivateOrder tryAmendLongOrder(String orderId, double price, boolean longCanceled) {
