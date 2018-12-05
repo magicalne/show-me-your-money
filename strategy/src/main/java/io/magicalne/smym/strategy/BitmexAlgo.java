@@ -147,10 +147,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             } else if (imbalance > IMBALANCE && currentPosition == 0) {
               log.info("Bid order filled.");
               this.currentPosition += contracts;
-              double l = calculateLeverage(longPrice, bestAsk);
-              exchange.setLeverage(symbol, l);
-              log.info("Set leverage to {}.", l);
               this.shortPrice = bestAsk;
+              if (shortPrice < longPrice) {
+                double l = calculateLeverage(longPrice, shortPrice);
+                exchange.setLeverage(symbol, l);
+                log.info("Set leverage to {}.", l);
+              }
               BitmexPrivateOrder askOrder = exchange.placeLimitOrder(symbol, shortPrice, contracts, BitmexSide.SELL);
               log.info("Place limit short order at {}.", shortPrice);
               this.shortOrderId = askOrder.getId();
@@ -158,10 +160,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
           } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             if (currentPosition < 0) {
-              double l = calculateLeverage(shortPrice, bestBid);
-              exchange.setLeverage(symbol, l);
-              log.info("Set leverage to {}.", l);
               this.longPrice = bestBid;
+              if (shortPrice < longPrice) {
+                double l = calculateLeverage(shortPrice, longPrice);
+                exchange.setLeverage(symbol, l);
+                log.info("Set leverage to {}.", l);
+              }
               BitmexPrivateOrder bidOrder = exchange.placeLimitOrder(symbol, longPrice, contracts, BitmexSide.BUY);
               log.info("Replace limit bid order at {}.", longPrice);
               this.longOrderId = bidOrder.getId();
@@ -171,10 +175,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
           } else if (Double.compare(bestBid, longPrice) > 0) {
             if (currentPosition < 0) {
-              double l = calculateLeverage(shortPrice, bestBid);
-              exchange.setLeverage(symbol, l);
-              log.info("Set leverage to {}.", l);
               this.longPrice = bestBid;
+              if (shortPrice < longPrice) {
+                double l = calculateLeverage(shortPrice, longPrice);
+                exchange.setLeverage(symbol, l);
+                log.info("Set leverage to {}.", l);
+              }
               exchange.amendOrderPrice(longOrderId, contracts, longPrice);
               log.info("Amend long order to {}", longPrice);
             } else if (currentPosition == 0) {
@@ -193,10 +199,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             } else if (imbalance < -IMBALANCE && currentPosition == 0) {
               log.info("Ask order filled.");
               this.currentPosition -= contracts;
-              double l = calculateLeverage(shortPrice, bestBid);
-              exchange.setLeverage(symbol, l);
-              log.info("Set leverage to {}.", l);
               this.longPrice = bestBid;
+              if (shortPrice < longPrice) {
+                double l = calculateLeverage(shortPrice, longPrice);
+                exchange.setLeverage(symbol, l);
+                log.info("Set leverage to {}.", l);
+              }
               BitmexPrivateOrder bidOrder = exchange.placeLimitOrder(symbol, longPrice, contracts, BitmexSide.BUY);
               log.info("Place limit bid order at {}.", longPrice);
               this.longOrderId = bidOrder.getId();
@@ -204,10 +212,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
           } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             if (currentPosition > 0) { //need to close open bid
-              double l = calculateLeverage(longPrice, bestAsk);
-              exchange.setLeverage(symbol, l);
-              log.info("Set leverage to {}.", l);
               this.shortPrice = bestAsk;
+              if (shortPrice < longPrice) {
+                double l = calculateLeverage(longPrice, shortPrice);
+                exchange.setLeverage(symbol, l);
+                log.info("Set leverage to {}.", l);
+              }
               BitmexPrivateOrder askOrder = exchange.placeLimitOrder(symbol, shortPrice, contracts, BitmexSide.SELL);
               log.info("Place limit short order at {}.", shortPrice);
               this.shortOrderId = askOrder.getId();
@@ -217,10 +227,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
           } else if (Double.compare(bestAsk, shortPrice) < 0) {
             if (currentPosition > 0) {
-              double l = calculateLeverage(longPrice, bestAsk);
-              exchange.setLeverage(symbol, l);
-              log.info("Set leverage to {}.", l);
               this.shortPrice = bestAsk;
+              if (shortPrice < longPrice) {
+                double l = calculateLeverage(longPrice, shortPrice);
+                exchange.setLeverage(symbol, l);
+                log.info("Set leverage to {}.", l);
+              }
               exchange.amendOrderPrice(shortOrderId, contracts, shortPrice);
               log.info("Amend short order to {}", shortPrice);
             } else if (currentPosition == 0) {
