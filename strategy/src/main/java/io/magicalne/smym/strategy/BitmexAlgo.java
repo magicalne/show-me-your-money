@@ -234,9 +234,10 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private double calculateLeverage(double tradePrice, double newPrice) {
+      final int scale = 2;
+      RoundingMode mode = Double.compare(tradePrice, newPrice) > 0 ? RoundingMode.UP : RoundingMode.DOWN;
       return new BigDecimal(tradePrice * leverage)
-        .divide(new BigDecimal(newPrice), RoundingMode.HALF_EVEN)
-        .setScale(2, RoundingMode.HALF_EVEN)
+        .divide(new BigDecimal(newPrice), scale, mode)
         .doubleValue();
     }
 
