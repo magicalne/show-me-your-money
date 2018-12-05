@@ -84,6 +84,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private String shortOrderId;
     private double longPrice;
     private double shortPrice;
+    private int currentPosition = 0;
     private static final double TICK = 0.5;
     private static final double IMBALANCE = 0.3;
 
@@ -139,8 +140,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         if (longOrderId != null) {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, longOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
-            if (imbalance > IMBALANCE && shortOrderId == null) {
+            if (currentPosition < 0) {
+              currentPosition += contracts;
+              log.info("Bid order filled. Position closed.");
+              this.longOrderId = null;
+            } else if (imbalance > IMBALANCE && currentPosition == 0) {
               log.info("Bid order filled.");
+              this.currentPosition += contracts;
               double l = calculateLeverage(longPrice, bestAsk);
               exchange.setLeverage(symbol, l);
               log.info("Set leverage to {}.", l);
@@ -150,17 +156,44 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               this.shortOrderId = askOrder.getId();
               this.longOrderId = null;
             }
+          } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+            if (currentPosition < 0) {
+              double l = calculateLeverage(shortPrice, bestBid);
+              exchange.setLeverage(symbol, l);
+              log.info("Set leverage to {}.", l);
+              this.longPrice = bestBid;
+              BitmexPrivateOrder bidOrder = exchange.placeLimitOrder(symbol, longPrice, contracts, BitmexSide.BUY);
+              log.info("Replace limit bid order at {}.", longPrice);
+              this.longOrderId = bidOrder.getId();
+            } else if (currentPosition == 0) {
+              this.longOrderId = null;
+              log.info("Bid order was canceled.");
+            }
           } else if (Double.compare(bestBid, longPrice) > 0) {
-            boolean cancel = exchange.cancel(longOrderId);
-            log.info("cancel long order {}", cancel);
-            this.longOrderId = null;
+            if (currentPosition < 0) {
+              double l = calculateLeverage(shortPrice, bestBid);
+              exchange.setLeverage(symbol, l);
+              log.info("Set leverage to {}.", l);
+              this.longPrice = bestBid;
+              exchange.amendOrderPrice(longOrderId, contracts, longPrice);
+              log.info("Amend long order to {}", longPrice);
+            } else if (currentPosition == 0) {
+              boolean cancel = exchange.cancel(longOrderId);
+              log.info("Cancel bid order: {}", cancel);
+              longOrderId = null;
+            }
           }
         } else {
           BitmexPrivateOrder order = deltaClient.getOrderById(symbol, shortOrderId);
           if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
-            if (imbalance < -IMBALANCE && longOrderId == null) {
+            if (currentPosition > 0) {
+              currentPosition -= contracts;
+              log.info("Ask order filled. Position closed.");
+              this.shortOrderId = null;
+            } else if (imbalance < -IMBALANCE && currentPosition == 0) {
               log.info("Ask order filled.");
-              double l = calculateLeverage(longPrice, bestAsk);
+              this.currentPosition -= contracts;
+              double l = calculateLeverage(shortPrice, bestBid);
               exchange.setLeverage(symbol, l);
               log.info("Set leverage to {}.", l);
               this.longPrice = bestBid;
@@ -169,10 +202,32 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               this.longOrderId = bidOrder.getId();
               this.shortOrderId = null;
             }
+          } else if (order.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+            if (currentPosition > 0) { //need to close open bid
+              double l = calculateLeverage(longPrice, bestAsk);
+              exchange.setLeverage(symbol, l);
+              log.info("Set leverage to {}.", l);
+              this.shortPrice = bestAsk;
+              BitmexPrivateOrder askOrder = exchange.placeLimitOrder(symbol, shortPrice, contracts, BitmexSide.SELL);
+              log.info("Place limit short order at {}.", shortPrice);
+              this.shortOrderId = askOrder.getId();
+            } else if (currentPosition == 0) {
+              this.shortOrderId = null;
+              log.info("Ask order was canceled.");
+            }
           } else if (Double.compare(bestAsk, shortPrice) < 0) {
-            boolean cancel = exchange.cancel(shortOrderId);
-            log.info("cancel short order {}", cancel);
-            this.shortOrderId = null;
+            if (currentPosition > 0) {
+              double l = calculateLeverage(longPrice, bestAsk);
+              exchange.setLeverage(symbol, l);
+              log.info("Set leverage to {}.", l);
+              this.shortPrice = bestAsk;
+              exchange.amendOrderPrice(shortOrderId, contracts, shortPrice);
+              log.info("Amend short order to {}", shortPrice);
+            } else if (currentPosition == 0) {
+              boolean cancel = exchange.cancel(shortOrderId);
+              log.info("Cancel ask order: {}", cancel);
+              shortOrderId = null;
+            }
           }
         }
       }
