@@ -127,9 +127,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       double makeBestBid = makeOB.getBestBid().getPrice();
       double makeBestAsk = makeOB.getBestAsk().getPrice();
 
-      if (bidOrder == null && makeImb < -imbalance) {
+      if (bidOrder == null && (makeImb < -imbalance || askFilled)) {
         bidOrder = exchange.placeLimitOrder(make, makeBestBid, contracts, BitmexSide.BUY);
-      } else if (askOrder == null && makeImb > imbalance) {
+      } else if (askOrder == null && (makeImb > imbalance || bidFilled)) {
         askOrder = exchange.placeLimitOrder(make, makeBestAsk, contracts, BitmexSide.SELL);
       } else if (bidOrder != null && !bidFilled) {
         BitmexPrivateOrder bid = deltaClient.getOrderById(make, bidOrder.getId());
