@@ -149,6 +149,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               this.bidOrder = null;
             }
           }
+        } else if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+          this.bidOrder = null;
         }
       } else if (askOrder != null && !askFilled) {
         BitmexPrivateOrder ask = deltaClient.getOrderById(make, askOrder.getId());
@@ -168,17 +170,25 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               this.askOrder = null;
             }
           }
+        } else if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+          this.askOrder = null;
         }
       }
+
+      BitmexDeltaClient.OrderBookL2 hedgeOB = deltaClient.getOrderBookL2(hedge);
+      double hedgeBestBid = hedgeOB.getBestBid().getPrice();
+      double hedgeBestAsk = hedgeOB.getBestAsk().getPrice();
 
       if (bidFilled && askFilled) {
         if (hedgeBuyOrder == null && hedgeSellOrder != null) {
           double price = calculateLimitBuy(bidOrder.getPrice().doubleValue(), askOrder.getPrice().doubleValue(), hedgeSellOrder.getPrice().doubleValue());
-          hedgeBuyOrder = exchange.placeLimitOrder(hedge, price, contracts, BitmexSide.SELL);
+          price = Double.min(price, hedgeBestBid);
+          hedgeBuyOrder = exchange.placeLimitOrder(hedge, price, contracts, BitmexSide.BUY);
           log.info("Place limit hedge buy at {}.", price);
         } else if (hedgeSellOrder == null && hedgeBuyOrder != null) {
           double price = calculateLimiSell(bidOrder.getPrice().doubleValue(), askOrder.getPrice().doubleValue(), hedgeBuyOrder.getPrice().doubleValue());
-          hedgeSellOrder = exchange.placeLimitOrder(hedge, price, contracts, BitmexSide.BUY);
+          price = Double.max(price, hedgeBestAsk);
+          hedgeSellOrder = exchange.placeLimitOrder(hedge, price, contracts, BitmexSide.SELL);
           log.info("Place limit hedge sell at {}.", price);
         } else if (hedgeBuyOrder != null && hedgeSellOrder != null) {
           if (hedgeBuyFilled) {
@@ -187,6 +197,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               calculateProfitWithMarketBuy(bidOrder.getPrice().doubleValue(), askOrder.getPrice().doubleValue(),
                 hedgeBuyOrder.getPrice().doubleValue(), hedge.getPrice().doubleValue());
               reset();
+            } else if (hedge.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+              hedgeSellOrder = null;
             }
           } else if (hedgeSellFilled) {
             BitmexPrivateOrder hedge = deltaClient.getOrderById(this.hedge, hedgeBuyOrder.getId());
@@ -194,6 +206,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               calculateProfitWithMarketSell(bidOrder.getPrice().doubleValue(), askOrder.getPrice().doubleValue(),
                 hedge.getPrice().doubleValue(), hedgeSellOrder.getPrice().doubleValue());
               reset();
+            } else if (hedge.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+              hedgeBuyOrder = null;
             }
           }
         }
