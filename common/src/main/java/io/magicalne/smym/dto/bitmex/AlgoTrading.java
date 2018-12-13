@@ -4,9 +4,8 @@ import lombok.Data;
 
 @Data
 public class AlgoTrading {
-  private String make;
-  private String hedge;
-  private int contracts;
+  private String symbol;
+  private int contract;
   private double leverage;
-  private double imbalance;
+  private double spread;
 }
