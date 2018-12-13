@@ -16,6 +16,7 @@ import org.jpmml.model.PMMLUtil;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
 import org.knowm.xchange.bitmex.dto.trade.*;
 import org.knowm.xchange.exceptions.ExchangeException;
+import org.knowm.xchange.exceptions.RateLimitExceededException;
 import org.xml.sax.SAXException;
 
 import javax.xml.bind.JAXBException;
@@ -42,7 +43,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     this.config = readYaml(path, BitmexConfig.class);
   }
 
-  public void execute() {
+  public void execute() throws InterruptedException {
     List<AlgoTrading> algoTradings = config.getAlgoTradings();
     List<MarketMaker> list = new LinkedList<>();
     for (AlgoTrading a : algoTradings) {
@@ -55,14 +56,17 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       for (MarketMaker ofp : list) {
         try {
           ofp.execute();
+        } catch (RateLimitExceededException e) {
+          log.warn("Need to retry in second due to: ", e);
+          Thread.sleep(1500);
         } catch (ExchangeException e) {
           log.error("Bitmex exehange exception: ", e);
+          Thread.sleep(500);
         } catch (Exception e) {
           log.error("Trading with exception: ", e);
         }
       }
     }
-
   }
 
   @Slf4j
