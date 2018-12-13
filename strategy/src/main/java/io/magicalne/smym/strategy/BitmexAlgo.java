@@ -132,6 +132,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         askContract = contract;
         bidOrder = orders.get(0);
         askOrder = orders.get(1);
+        log.info("Place bid at {}, ask: {}", bidPrice, askPrice);
       } else {
         if (bidOrder != null && !bidFilled) {
           BitmexPrivateOrder bid = deltaClient.getOrderById(symbol, bidOrder.getId());
@@ -161,11 +162,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
                   this.askPrice = askPrice;
                   bidContract = contract;
                   askContract += contract;
-                  log.info("Position: {}", position);
-                  log.info("bid order: {} * {}, ask order: {} * {}", bidPrice, bidContract, askPrice, askContract);
                 }
               }
             }
+            log.info("Position: {}", position);
+            log.info("place bid: {} * {}, ask: {} * {}", bidPrice, bidContract, askPrice, askContract);
             bidFilled = true;
           } else if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             this.bidOrder = null;
@@ -181,7 +182,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             } else {
               if (position.getPrice() < 0) {
                 int c = askContract + position.getContract();
-                double p = c / (askContract * 1.0d / askPrice + position.getContract() / position.getPrice());
+                double p = c / (askContract * 1.0d / askPrice - position.getContract() / position.getPrice());
                 handleFilledAskOrder(mid, c);
                 position.update(-p, c);
               } else {
@@ -223,8 +224,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       this.bidPrice = bidPrice;
       this.askPrice = askPrice;
       askContract += contract;
-      log.info("Position: {}", position);
-      log.info("place bid: {} * {}, ask: {} * {}", bidPrice, bidContract, askPrice, askContract);
     }
 
     private void handleFilledAskOrder(double mid, int positionChanged) {
@@ -254,6 +253,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       askFilled = false;
       bidContract = contract;
       askContract = contract;
+      log.info("Reset.");
     }
 
 
@@ -267,12 +267,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private void askFilledProfit() {
       double p = position.getContract() * (1/ position.getPrice() - 1.0 / askPrice)
         + REBATE * position.getContract() * (1 / position.getPrice()  + 1.0 / askPrice);
-      profit += p;
-      log.info("Profit of this round: {}, total profit: {}", p, profit);
-    }
-
-    private void calculateProfitWithMarketSell(double bid, double ask, double buy, double sell) {
-      double p = contract * (1 / bid - 1 - ask + 1 / buy - 1 / sell) - contract / sell * FEE + contract * REBATE * (1 / bid + 1 / ask + 1 / buy);
       profit += p;
       log.info("Profit of this round: {}, total profit: {}", p, profit);
     }
