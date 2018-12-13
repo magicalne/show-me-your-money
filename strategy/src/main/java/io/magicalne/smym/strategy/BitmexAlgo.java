@@ -85,8 +85,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private BitmexPrivateOrder bidOrder = null;
     private BitmexPrivateOrder askOrder = null;
     private Position position = null;
-    private boolean bidFilled = false;
-    private boolean askFilled = false;
+//    private boolean bidFilled = false;
+//    private boolean askFilled = false;
     private double profit = 0;
     private int bidContract;
     private int askContract;
@@ -138,7 +138,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
         askOrder = orders.get(1);
         log.info("Place bid at {}, ask: {}", bidPrice, askPrice);
       } else {
-        if (bidOrder != null && !bidFilled) {
+        if (bidOrder != null) {
           BitmexPrivateOrder bid = deltaClient.getOrderById(symbol, bidOrder.getId());
           if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             log.info("Bid filled at {}", bid.getPrice());
@@ -171,12 +171,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             }
             log.info("Position: {}", position);
             log.info("place bid: {} * {}, ask: {} * {}", bidPrice, bidContract, askPrice, askContract);
-            bidFilled = true;
           } else if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             this.bidOrder = null;
           }
         }
-        if (askOrder != null && !askFilled) {
+        if (askOrder != null) {
           BitmexPrivateOrder ask = deltaClient.getOrderById(symbol, askOrder.getId());
           if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             log.info("Ask filled at {}", ask.getPrice());
@@ -209,7 +208,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
                 }
               }
             }
-            askFilled = true;
           } else if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             this.askOrder = null;
           }
@@ -253,8 +251,6 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       bidOrder = null;
       askOrder = null;
       position = null;
-      bidFilled = false;
-      askFilled = false;
       bidContract = contract;
       askContract = contract;
       log.info("Reset.");
