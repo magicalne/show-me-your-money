@@ -139,13 +139,13 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Bid filled at {}", bid.getPrice());
             if (position == null) {
               position = new Position(bid.getPrice().doubleValue(), bidContract);
-              handleFilledBidOrder(mid);
+              handleFilledBidOrder(mid, bidContract);
             } else {
               if (position.getPrice() > 0) {
                 int c = bidContract + position.getContract();
                 double p = c / (bidContract * 1.0d / bidPrice + position.getContract() / position.getPrice());
+                handleFilledBidOrder(mid, c);
                 position.update(p, c);
-                handleFilledBidOrder(mid);
               } else {
                 bidFilledProfit();
                 if (position.getContract() == bidContract) {
@@ -177,12 +177,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Ask filled at {}", ask.getPrice());
             if (position == null) {
               position = new Position(-ask.getPrice().doubleValue(), askContract);
-              handleFilledAskOrder(mid);
+              handleFilledAskOrder(mid, askContract);
             } else {
               if (position.getPrice() < 0) {
                 int c = askContract + position.getContract();
                 double p = c / (askContract * 1.0d / askPrice + position.getContract() / position.getPrice());
-                handleFilledAskOrder(mid);
+                handleFilledAskOrder(mid, c);
                 position.update(-p, c);
               } else {
                 askFilledProfit();
@@ -212,8 +212,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       }
     }
 
-    private void handleFilledBidOrder(double mid) {
-      double skew = getSkew(bidContract, Math.max(bidContract, askContract), spread);
+    private void handleFilledBidOrder(double mid, int positionChanged) {
+      double skew = getSkew(positionChanged, Math.max(bidContract, askContract), spread);
       double newMid = mid * (1 + skew);
       double newAsk = newMid * (1 + spread);
       long askPrice = Math.round((askContract * this.askPrice + newAsk * contract) / (askContract + contract));
@@ -227,8 +227,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       log.info("place bid: {} * {}, ask: {} * {}", bidPrice, bidContract, askPrice, askContract);
     }
 
-    private void handleFilledAskOrder(double mid) {
-      double skew = getSkew(askContract, Math.max(bidContract, askContract), spread);
+    private void handleFilledAskOrder(double mid, int positionChanged) {
+      double skew = getSkew(-positionChanged, Math.max(bidContract, askContract), spread);
       double newMid = mid * (1 + skew);
       double newBid = newMid * (1 - spread);
       long bidPrice = Math.round((bidContract * this.bidPrice + newBid * contract) / (bidContract + contract));
@@ -243,7 +243,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     }
 
     private double getSkew(int change, int total, double spread) {
-      return (change / total) * spread * -1;
+      return (1.0d * change / total) * spread * -1;
     }
 
     private void reset() {
