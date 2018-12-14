@@ -198,7 +198,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
                   long bidPrice = Math.round((bidContract * this.bidPrice + newBid * contract) / (bidContract + contract));
                   bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract + contract, bidPrice);
                   askOrder = exchange.placeLimitOrder(symbol, askPrice, contract, BitmexSide.SELL);
-                  position.update(this.askPrice, askContract - position.getContract());
+                  position.update(-this.askPrice, askContract - position.getContract());
                   this.bidPrice = bidPrice;
                   this.askPrice = askPrice;
                   bidContract += contract;
