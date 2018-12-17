@@ -152,8 +152,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               if (position.getPrice() > 0) {
                 supplyLongPosition(mid);
               } else {
-                bidFilledProfit();
                 if (position.getContract() == bidContract) {
+                  bidFilledProfit();
                   reset();
                 } else {
                   closeShortPositionAndOpenLongPosition(bestBid, bestAsk);
@@ -176,8 +176,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
               if (position.getPrice() < 0) {
                 supplyShortPosition(mid);
               } else {
-                askFilledProfit();
                 if (position.getContract() == askContract) {
+                  askFilledProfit();
                   reset();
                 } else {
                   closeLongPositionAndOpenShortPosition(bestBid, bestAsk);
