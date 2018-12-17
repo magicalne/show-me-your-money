@@ -197,20 +197,38 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (Double.compare(bestAsk, position.getPrice()) > 0 && imbalance > IMBALANCE) {
             if (Double.compare(bestAsk, profitableAsk) > 0) {
               profitableAsk = bestAsk;
-            } else if (Double.compare(askOrder.getPrice().doubleValue(), bestAsk) != 0) {
-              askOrder = exchange.amendOrderPrice(askOrder.getId(), askContract, bestAsk);
-              askPrice = Math.round(bestAsk);
-              log.info("Amend ask order to {}.", bestAsk);
+            } else {
+              if (askOrder == null) {
+                if (Double.compare(position.getPrice(), bestAsk) < 0) {
+                  askOrder = exchange.placeLimitOrder(symbol, bestAsk, askContract, BitmexSide.SELL);
+                  askPrice = Math.round(bestAsk);
+                } else {
+                  askOrder = exchange.placeLimitOrder(symbol, askPrice, askContract, BitmexSide.SELL);
+                }
+              } else if (Double.compare(askOrder.getPrice().doubleValue(), bestAsk) != 0) {
+                askOrder = exchange.amendOrderPrice(askOrder.getId(), askContract, bestAsk);
+                askPrice = Math.round(bestAsk);
+                log.info("Amend ask order to {}.", bestAsk);
+              }
             }
           }
         } else if (position.getPrice() < 0) {
           if (Double.compare(bestBid, -position.getPrice()) < 0 && imbalance < -IMBALANCE) {
             if (Double.compare(bestBid, profitableBid) < 0) {
               profitableBid = bestBid;
-            } else if (Double.compare(bidOrder.getPrice().doubleValue(), bestBid) != 0) {
-              bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract, bestBid);
-              bidPrice = Math.round(bestBid);
-              log.info("Amend bid order to {}.", bestBid);
+            } else {
+              if (bidOrder == null) {
+                if (Double.compare(-position.getPrice(), bestBid) > 0) {
+                  bidOrder = exchange.placeLimitOrder(symbol, bestBid, bidContract, BitmexSide.BUY);
+                  bidPrice = Math.round(bestBid);
+                } else {
+                  bidOrder = exchange.placeLimitOrder(symbol, bidPrice, bidContract, BitmexSide.BUY);
+                }
+              } else if (Double.compare(bidOrder.getPrice().doubleValue(), bestBid) != 0) {
+                bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract, bestBid);
+                bidPrice = Math.round(bestBid);
+                log.info("Amend bid order to {}.", bestBid);
+              }
             }
           }
         }
