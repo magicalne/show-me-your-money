@@ -75,6 +75,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private static final double FEE = 0.00075;
     private static final double REBATE = 0.00025;
     private static final double TICK = 0.5;
+    private static final double IMBALANCE = 0.3;
     private final double spread;
     private final BitmexDeltaClient deltaClient;
     private final String symbol;
@@ -92,6 +93,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
     private int askContract;
     private long bidPrice;
     private long askPrice;
+    private double profitableAsk = -1;
+    private double profitableBid = Integer.MAX_VALUE;
 
     MarketMaker(String deltaHost, int deltaPort, AlgoTrading config, BitmexExchange exchange) {
       this.deltaClient = new BitmexDeltaClient(deltaHost, deltaPort);
@@ -127,10 +130,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       BitmexDeltaClient.OrderBookL2 ob = deltaClient.getOrderBookL2(symbol);
       double bestBid = ob.getBestBid().getPrice();
       double bestAsk = ob.getBestAsk().getPrice();
+      double imbalance = ob.imbalance();
       double mid = (bestBid + bestAsk) / 2;
-      if (bidOrder == null && askOrder == null) {
-        bidPrice = Math.round(bestBid * (1 - spread));
-        askPrice = Math.round(bestAsk * (1 + spread));
+      if (bidOrder == null && askOrder == null && -IMBALANCE < imbalance && imbalance < IMBALANCE) {
+        bidPrice = Math.round(bestBid - TICK);
+        askPrice = Math.round(bestAsk + TICK);
         List<BitmexPrivateOrder> orders = exchange.placePairOrders(symbol, bidPrice, askPrice, contract);
         bidContract = contract;
         askContract = contract;
@@ -143,29 +147,16 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             log.info("Bid filled at {}", bid.getPrice());
             if (position == null) {
-              position = new Position(bid.getPrice().doubleValue(), bidContract);
-              handleFilledBidOrder(mid, bidContract);
+              openLongPosition(mid, bid);
             } else {
               if (position.getPrice() > 0) {
-                int c = bidContract + position.getContract();
-                double p = c / (bidContract * 1.0d / bidPrice + position.getContract() / position.getPrice());
-                handleFilledBidOrder(mid, c);
-                position.update(p, c);
+                supplyLongPosition(mid);
               } else {
                 bidFilledProfit();
                 if (position.getContract() == bidContract) {
                   reset();
                 } else {
-                  long bidPrice = Math.round(bestBid * (1 - spread));
-                  double newAsk = bestAsk * (1 + spread);
-                  long askPrice = Math.round((askContract * this.askPrice + contract * newAsk) / (askContract + contract));
-                  askOrder = exchange.amendOrderPrice(askOrder.getId(), askContract + contract, askPrice);
-                  bidOrder = exchange.placeLimitOrder(symbol, bidPrice, contract, BitmexSide.BUY);
-                  position.update(this.bidPrice, bidContract - position.getContract());
-                  this.bidPrice = bidPrice;
-                  this.askPrice = askPrice;
-                  bidContract = contract;
-                  askContract += contract;
+                  closeShortPositionAndOpenLongPosition(bestBid, bestAsk);
                 }
               }
             }
@@ -180,43 +171,66 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             log.info("Ask filled at {}", ask.getPrice());
             if (position == null) {
-              position = new Position(-ask.getPrice().doubleValue(), askContract);
-              handleFilledAskOrder(mid, askContract);
+              openShortPosition(mid, ask);
             } else {
               if (position.getPrice() < 0) {
-                int c = askContract + position.getContract();
-                double p = c / (askContract * 1.0d / askPrice - position.getContract() / position.getPrice());
-                handleFilledAskOrder(mid, c);
-                position.update(-p, c);
+                supplyShortPosition(mid);
               } else {
                 askFilledProfit();
                 if (position.getContract() == askContract) {
                   reset();
                 } else {
-                  long askPrice = Math.round(bestAsk * (1 + spread));
-                  double newBid = bestBid * (1 - spread);
-                  long bidPrice = Math.round((bidContract * this.bidPrice + newBid * contract) / (bidContract + contract));
-                  bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract + contract, bidPrice);
-                  askOrder = exchange.placeLimitOrder(symbol, askPrice, contract, BitmexSide.SELL);
-                  position.update(-this.askPrice, askContract - position.getContract());
-                  this.bidPrice = bidPrice;
-                  this.askPrice = askPrice;
-                  bidContract += contract;
-                  askContract = contract;
-                  log.info("Position: {}", position);
-                  log.info("bid order: {} * {}, ask order: {} * {}", bidPrice, bidContract, askPrice, askContract);
+                  closeLongPositionAndOpenShortPosition(bestBid, bestAsk);
                 }
               }
+              log.info("Position: {}", position);
+              log.info("bid order: {} * {}, ask order: {} * {}", bidPrice, bidContract, askPrice, askContract);
             }
           } else if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             this.askOrder = null;
           }
         }
       }
+
+      if (position != null) {
+        if (position.getPrice() > 0) {
+          if (Double.compare(bestAsk, position.getPrice()) > 0 && imbalance > IMBALANCE) {
+            if (Double.compare(bestAsk, profitableAsk) > 0) {
+              profitableAsk = bestAsk;
+            } else if (Double.compare(askPrice, bestAsk) != 0) {
+              askOrder = exchange.amendOrderPrice(askOrder.getId(), contract, bestAsk);
+              log.info("Amend ask order to {}.", bestAsk);
+            }
+          }
+        } else if (position.getPrice() < 0) {
+          if (Double.compare(bestBid, -position.getPrice()) < 0 && imbalance < -IMBALANCE) {
+            if (Double.compare(bestBid, profitableBid) < 0) {
+              profitableBid = bestBid;
+            } else if (Double.compare(bidPrice, bestBid) != 0) {
+              bidOrder = exchange.amendOrderPrice(bidOrder.getId(), contract, bestBid);
+              log.info("Amend bid order to {}.", bestBid);
+            }
+          }
+        }
+      }
     }
 
-    private void handleFilledBidOrder(double mid, int positionChanged) {
-      double skew = getSkew(positionChanged, Math.max(bidContract, askContract), spread);
+    private void openLongPosition(double mid, BitmexPrivateOrder bid) {
+      double newAsk = mid * (1 + spread);
+      long askPrice = Math.round((askContract * this.askPrice + newAsk * contract) / (askContract + contract));
+      long bidPrice = Math.round(mid * (1 - spread));
+      askOrder = exchange.amendOrderPrice(askOrder.getId(), askContract+contract, askPrice);
+      bidOrder = exchange.placeLimitOrder(symbol, bidPrice, bidContract, BitmexSide.BUY);
+      this.bidPrice = bidPrice;
+      this.askPrice = askPrice;
+      askContract += contract;
+      position = new Position(bid.getPrice().doubleValue(), bidContract);
+    }
+
+    private void supplyLongPosition(double mid) {
+      int c = bidContract + position.getContract();
+      double p = c / (bidContract * 1.0d / bidPrice + position.getContract() / position.getPrice());
+      double skew = getSkew(c, askContract, spread);
       double newMid = mid * (1 + skew);
       double newAsk = newMid * (1 + spread);
       long askPrice = Math.round((askContract * this.askPrice + newAsk * contract) / (askContract + contract));
@@ -226,10 +240,38 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       this.bidPrice = bidPrice;
       this.askPrice = askPrice;
       askContract += contract;
+      position.update(p, c);
     }
 
-    private void handleFilledAskOrder(double mid, int positionChanged) {
-      double skew = getSkew(-positionChanged, Math.max(bidContract, askContract), spread);
+    private void closeShortPositionAndOpenLongPosition(double bestBid, double bestAsk) {
+      long bidPrice = Math.round(bestBid * (1 - spread));
+      double newAsk = bestAsk * (1 + spread);
+      long askPrice = Math.round((askContract * this.askPrice + contract * newAsk) / (askContract + contract));
+      askOrder = exchange.amendOrderPrice(askOrder.getId(), askContract + contract, askPrice);
+      bidOrder = exchange.placeLimitOrder(symbol, bidPrice, contract, BitmexSide.BUY);
+      position.update(this.bidPrice, bidContract - position.getContract());
+      this.bidPrice = bidPrice;
+      this.askPrice = askPrice;
+      bidContract = contract;
+      askContract += contract;
+    }
+
+    private void openShortPosition(double mid, BitmexPrivateOrder ask) {
+      long bidPrice = Math.round((bidContract * this.bidPrice + mid * contract) / (bidContract + contract));
+      long askPrice = Math.round(mid * (1 + spread));
+      bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract + contract, bidPrice);
+      askOrder = exchange.placeLimitOrder(symbol, askPrice, askContract, BitmexSide.SELL);
+      this.bidPrice = bidPrice;
+      this.askPrice = askPrice;
+      bidContract += contract;
+      position = new Position(-ask.getPrice().doubleValue(), askContract);
+
+    }
+
+    private void supplyShortPosition(double mid) {
+      int c = askContract + position.getContract();
+      double p = c / (askContract * 1.0d / askPrice - position.getContract() / position.getPrice());
+      double skew = getSkew(-c, bidContract, spread);
       double newMid = mid * (1 + skew);
       double newBid = newMid * (1 - spread);
       long bidPrice = Math.round((bidContract * this.bidPrice + newBid * contract) / (bidContract + contract));
@@ -239,8 +281,20 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       this.bidPrice = bidPrice;
       this.askPrice = askPrice;
       bidContract += contract;
-      log.info("Position: {}", position);
-      log.info("place bid: {} * {}, ask: {} * {}", bidPrice, bidContract, askPrice, askContract);
+      position.update(-p, c);
+    }
+
+    private void closeLongPositionAndOpenShortPosition(double bestBid, double bestAsk) {
+      long askPrice = Math.round(bestAsk * (1 + spread));
+      double newBid = bestBid * (1 - spread);
+      long bidPrice = Math.round((bidContract * this.bidPrice + newBid * contract) / (bidContract + contract));
+      bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract + contract, bidPrice);
+      askOrder = exchange.placeLimitOrder(symbol, askPrice, contract, BitmexSide.SELL);
+      position.update(-this.askPrice, askContract - position.getContract());
+      this.bidPrice = bidPrice;
+      this.askPrice = askPrice;
+      bidContract += contract;
+      askContract = contract;
     }
 
     private double getSkew(int change, int total, double spread) {
@@ -253,6 +307,8 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       position = null;
       bidContract = contract;
       askContract = contract;
+      profitableAsk = -1;
+      profitableBid = Integer.MAX_VALUE;
       log.info("Reset.");
     }
 
