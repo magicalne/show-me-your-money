@@ -197,8 +197,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (Double.compare(bestAsk, position.getPrice()) > 0 && imbalance > IMBALANCE) {
             if (Double.compare(bestAsk, profitableAsk) > 0) {
               profitableAsk = bestAsk;
-            } else if (Double.compare(askPrice, bestAsk) != 0) {
-              askOrder = exchange.amendOrderPrice(askOrder.getId(), contract, bestAsk);
+            } else if (Double.compare(askOrder.getPrice().doubleValue(), bestAsk) != 0) {
+              askOrder = exchange.amendOrderPrice(askOrder.getId(), askContract, bestAsk);
+              askPrice = Math.round(bestAsk);
               log.info("Amend ask order to {}.", bestAsk);
             }
           }
@@ -206,8 +207,9 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (Double.compare(bestBid, -position.getPrice()) < 0 && imbalance < -IMBALANCE) {
             if (Double.compare(bestBid, profitableBid) < 0) {
               profitableBid = bestBid;
-            } else if (Double.compare(bidPrice, bestBid) != 0) {
-              bidOrder = exchange.amendOrderPrice(bidOrder.getId(), contract, bestBid);
+            } else if (Double.compare(bidOrder.getPrice().doubleValue(), bestBid) != 0) {
+              bidOrder = exchange.amendOrderPrice(bidOrder.getId(), bidContract, bestBid);
+              bidPrice = Math.round(bestBid);
               log.info("Amend bid order to {}.", bestBid);
             }
           }
