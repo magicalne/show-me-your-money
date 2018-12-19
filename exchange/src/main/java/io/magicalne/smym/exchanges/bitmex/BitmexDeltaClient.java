@@ -186,6 +186,10 @@ public class BitmexDeltaClient {
       return (bidVol - askVol) *1.0d / (bidVol + askVol);
     }
 
+    public double bestMid() {
+      return (bids.get(0).getPrice() + asks.get(0).getPrice()) / 2;
+    }
+
     public double findFairBid() {
       long bidVol = bids.get(0).getSize();
       long askVol = asks.get(0).getSize();

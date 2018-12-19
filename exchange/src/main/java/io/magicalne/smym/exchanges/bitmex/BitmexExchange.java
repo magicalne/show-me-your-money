@@ -3,8 +3,10 @@ package io.magicalne.smym.exchanges.bitmex;
 import org.knowm.xchange.Exchange;
 import org.knowm.xchange.ExchangeFactory;
 import org.knowm.xchange.ExchangeSpecification;
+import org.knowm.xchange.bitmex.dto.marketdata.BitmexKline;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
 import org.knowm.xchange.bitmex.dto.trade.*;
+import org.knowm.xchange.bitmex.service.BitmexMarketDataService;
 import org.knowm.xchange.bitmex.service.BitmexTradeService;
 
 import java.math.BigDecimal;
@@ -14,10 +16,8 @@ import java.util.List;
 
 public class BitmexExchange {
 
-  public static final String ORDER_STATUS_FILLED = "Filled";
-  public static final String ORDER_STATUS_CANCELED = "Canceled";
-
   private final BitmexTradeService tradeService;
+  private final BitmexMarketDataService marketDataService;
 
   public BitmexExchange(String accessId, String secretKey) {
     ExchangeSpecification exSpec = new org.knowm.xchange.bitmex.BitmexExchange().getDefaultExchangeSpecification();
@@ -27,6 +27,7 @@ public class BitmexExchange {
 //    exSpec.setHost("testnet.bitmex.com");
     Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
     tradeService = ((BitmexTradeService) exchange.getTradeService());
+    marketDataService = (BitmexMarketDataService) exchange.getMarketDataService();
   }
 
   public BitmexPrivateOrder placeLimitOrder(String symbol, double price, int contracts, BitmexSide side) {
@@ -114,5 +115,10 @@ public class BitmexExchange {
 
   public BitmexPosition setLeverage(String symbol, double leverage) {
     return this.tradeService.updateLeveragePosition(symbol, new BigDecimal(leverage));
+  }
+
+  public List<BitmexKline> getRecentStats(String symbol) {
+
+    return marketDataService.getBucketedTrades("1h", false, symbol, 240, true);
   }
 }
