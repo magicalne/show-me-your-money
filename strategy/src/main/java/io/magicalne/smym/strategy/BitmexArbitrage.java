@@ -101,7 +101,7 @@ public class BitmexArbitrage extends Strategy<BitmexConfig> {
       for (int i = 0; i < swapKline.size(); i++) {
         BitmexKline s = swapKline.get(i);
         BitmexKline f = futureKline.get(i);
-        diff.add(s.getClose().subtract(f.getClose()).doubleValue());
+        diff.add(f.getClose().subtract(s.getClose()).doubleValue());
       }
       Stats stats = Stats.of(diff);
       mean = stats.mean();
