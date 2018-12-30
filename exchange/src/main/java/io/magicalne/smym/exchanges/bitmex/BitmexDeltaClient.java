@@ -10,6 +10,7 @@ import lombok.Data;
 import okhttp3.*;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPrivateOrder;
 import org.knowm.xchange.bitmex.dto.marketdata.BitmexPublicTrade;
+import org.knowm.xchange.bitmex.dto.trade.BitmexPosition;
 import org.knowm.xchange.bitmex.dto.trade.BitmexSide;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class BitmexDeltaClient {
 
@@ -51,6 +53,37 @@ public class BitmexDeltaClient {
       }
     }
     throw new BitmexQueryOrderException("There is no such order in delta server. order id: " + orderId);
+  }
+
+  public List<BitmexPrivateOrder> getNewOrders(String symbol) throws IOException {
+    Request req = new Request.Builder().url(baseUrl + "/order?symbol=" + symbol).get().build();
+    Call call = client.newCall(req);
+    try (Response res = call.execute()) {
+      if (res.isSuccessful()) {
+        ResponseBody body = res.body();
+        Preconditions.checkNotNull(body);
+        TypeReference<List<BitmexPrivateOrder>> ref = new TypeReference<List<BitmexPrivateOrder>>() {};
+        List<BitmexPrivateOrder> orders = objectMapper.readValue(body.string(), ref);
+        return orders
+          .stream()
+          .filter(o -> o.getOrderStatus() == BitmexPrivateOrder.OrderStatus.New)
+          .collect(Collectors.toList());
+      }
+    }
+    return null;
+  }
+
+  public BitmexPosition getPosition(String symbol) throws IOException {
+    Request req = new Request.Builder().url(baseUrl + "/position?symbol=" + symbol).get().build();
+    Call call = client.newCall(req);
+    try (Response res = call.execute()) {
+      if (res.isSuccessful()) {
+        ResponseBody body = res.body();
+        Preconditions.checkNotNull(body);
+        return objectMapper.readValue(body.string(), BitmexPosition.class);
+      }
+    }
+    return null;
   }
 
   public OrderBookL2 getOrderBookL2(String symbol) throws IOException {

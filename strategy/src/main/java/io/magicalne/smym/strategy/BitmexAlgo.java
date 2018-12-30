@@ -61,7 +61,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           Thread.sleep(1500);
         } catch (ExchangeException e) {
           log.error("Bitmex exehange exception: ", e);
-          Thread.sleep(500);
+          Thread.sleep(1500);
         } catch (Exception e) {
           log.error("Trading with exception: ", e);
         }
@@ -166,7 +166,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             profit += contract / bid.getPrice().doubleValue() + REBATE * contract / bid.getPrice().doubleValue();
             bids.removeLast();
-            log.info("Bid filled at {}", bid);
+            log.info("Bid filled at {}", bid.getPrice());
             if (position == null) {
               position = new Position(bid.getPrice().doubleValue(), contract);
             } else {
@@ -187,9 +187,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Position: {}", position);
           } else if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             bid = exchange.placeLimitOrder(symbol, Math.min(bid.getPrice().doubleValue(), bestBid), contract, BitmexSide.BUY);
-            bids.removeLast();
-            addBid(bid);
-            log.info("Replace bid order due to cancel. {}", bid.getId());
+            if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.New) {
+              bids.removeLast();
+              addBid(bid);
+              log.info("Replace bid order due to cancel. {}", bid.getId());
+            }
           }
         }
 
@@ -198,7 +200,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
             profit += -contract / ask.getPrice().doubleValue() + REBATE * contract / ask.getPrice().doubleValue();
             asks.removeFirst();
-            log.info("Ask filled at {}", ask);
+            log.info("Ask filled at {}", ask.getPrice());
             if (position == null) {
               position = new Position(-ask.getPrice().doubleValue(), contract);
             } else {
@@ -219,9 +221,11 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
             log.info("Position: {}", position);
           } else if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             ask = exchange.placeLimitOrder(symbol, Math.max(ask.getPrice().doubleValue(), bestAsk), contract, BitmexSide.SELL);
-            asks.removeLast();
-            addAsk(ask);
-            log.info("Replace ask order due to cancel. {}", ask.getId());
+            if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.New) {
+              asks.removeLast();
+              addAsk(ask);
+              log.info("Replace ask order due to cancel. {}", ask.getId());
+            }
           }
         }
       }
