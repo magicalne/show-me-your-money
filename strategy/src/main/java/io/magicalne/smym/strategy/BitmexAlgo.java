@@ -159,6 +159,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           }
         }
       } else {
+        checkPairFilled(bestBid, bestAsk);
         checkBidOrder(bestAsk);
         checkAskOrder(bestBid);
         if (!bids.isEmpty()) {
@@ -243,6 +244,26 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
       asks.add(ask);
       if (asks.size() > 1) {
         asks.sort(Comparator.comparing(BitmexPrivateOrder::getPrice));
+      }
+    }
+
+    private void checkPairFilled(double bestBid, double bestAsk) throws IOException, BitmexQueryOrderException {
+      if (this.bid != null && this.ask != null) {
+        bid = deltaClient.getOrderById(symbol, bid.getId());
+        ask = deltaClient.getOrderById(symbol, ask.getId());
+        if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled &&
+          ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Filled) {
+          addBid(bid);
+          addAsk(ask);
+          bid = null;
+          ask = null;
+        } else if (bid.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+          bid = exchange.placeLimitOrder(
+            symbol, Math.min(bestBid, bid.getPrice().doubleValue()), contract, BitmexSide.BUY);
+        } else if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
+          ask = exchange.placeLimitOrder(
+            symbol, Math.max(bestAsk, ask.getPrice().doubleValue()), contract, BitmexSide.SELL);
+        }
       }
     }
 
