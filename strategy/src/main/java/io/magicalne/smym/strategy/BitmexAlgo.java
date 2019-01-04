@@ -223,7 +223,7 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           } else if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.Canceled) {
             ask = exchange.placeLimitOrder(symbol, Math.max(ask.getPrice().doubleValue(), bestAsk), contract, BitmexSide.SELL);
             if (ask.getOrderStatus() == BitmexPrivateOrder.OrderStatus.New) {
-              asks.removeLast();
+              asks.removeFirst();
               addAsk(ask);
               log.info("Replace ask order due to cancel. {}", ask.getId());
             }
