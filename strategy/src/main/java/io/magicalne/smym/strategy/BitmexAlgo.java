@@ -138,22 +138,12 @@ public class BitmexAlgo extends Strategy<BitmexConfig> {
           long askPrice = Math.round(bestAsk * (1 + spread));
           placePairOrder(bidPrice, askPrice);
         } else if (Math.min(bids.size(), asks.size()) + position.getContract()/contract < limit) {
-          if (position.getContract() > 0) {
-            double askPrice;
-            if (position.getPrice() > mid) {
-              askPrice = Math.round(position.getPrice()) + TICK;
-            } else {
-              askPrice = Math.round(bestAsk * (1 + spread) - skew);
-            }
+          if (position.getPrice() > 0) {
+            double askPrice = Math.round(bestAsk * (1 + spread) - skew);
             long bidPrice = Math.round(bestBid * (1 - spread) - skew * (position.getContract() / contract));
             placePairOrder(bidPrice, askPrice);
-          } else if (position.getContract() < 0) {
-            double bidPrice;
-            if (-position.getPrice() > mid) {
-              bidPrice = Math.round(bestBid * (1 - spread) + skew);
-            } else {
-              bidPrice = Math.round(-position.getPrice()) - TICK;
-            }
+          } else {
+            double bidPrice = Math.round(bestBid * (1 - spread) + skew);
             long askPrice = Math.round(bestAsk * (1 + spread) + skew * (position.getContract() / contract));
             placePairOrder(bidPrice, askPrice);
           }
